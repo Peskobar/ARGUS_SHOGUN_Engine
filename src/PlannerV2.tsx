@@ -205,7 +205,11 @@ export default function PlannerV2() {
                   <WarningBox tone="amber">Receptura jest oznaczona jako {selectedRecipe.verificationStatus ?? 'UNVERIFIED'}. Ten etap nie potwierdza dawek, tylko egzekwuje logikę aplikacji, kolejności i zasobów.</WarningBox>
                 )}
                 {selectedRecipe.notes && <WarningBox tone="blue">{selectedRecipe.notes}</WarningBox>}
-                {warnings.map(warning => <WarningBox key={`${warning.code}-${warning.productId}`} tone="red">{warning.message}</WarningBox>)}
+                {warnings.map(warning => (
+                  <div key={`${warning.code}-${warning.productId}`}>
+                    <WarningBox tone="red">{warning.message}</WarningBox>
+                  </div>
+                ))}
                 {!toolSet.complete && (
                   <WarningBox tone="red">
                     Brak pełnego zestawu narzędzi. {toolSet.shortages.map(s => `${store.getProduct(s.productId)?.name ?? s.productId}: ${s.remainingMl} ml`).join(' · ')}
