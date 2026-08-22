@@ -1,0 +1,312 @@
+import React, { useMemo, useState } from 'react';
+import { AlertCircle, Beaker, Droplet, Play, Syringe, Wind } from 'lucide-react';
+import { PHYSICAL_SYRINGES } from './data';
+import { buildExecutionSteps, filterRecipes, validateRecipeContext } from './recipeEngine';
+import { useAppStore } from './store';
+import { allocateToolSet } from './syringeEngine';
+import { AllocationMode, ApplicationMethod, GrowthStage, Medium, WaterType } from './types';
+
+const ALLOCATION_MODES: Array<{ value: AllocationMode; label: string }> = [
+  { value: 'PRECISION', label: 'Precyzja' },
+  { value: 'SPEED', label: 'Szybkość' },
+  { value: 'MIN_TOOLS', label: 'Minimum' },
+];
+
+export default function PlannerV2() {
+  const store = useAppStore();
+  const [stage, setStage] = useState<GrowthStage>(GrowthStage.VEG);
+  const [method, setMethod] = useState<ApplicationMethod>(ApplicationMethod.ROOT_FEED);
+  const [selectedRecipeId, setSelectedRecipeId] = useState('');
+  const [volume, setVolume] = useState(5);
+  const [allocationMode, setAllocationMode] = useState<AllocationMode>('PRECISION');
+
+  const availableRecipes = useMemo(
+    () => filterRecipes(store.recipes, {
+      medium: store.currentMedium,
+      method,
+      stage,
+      waterType: store.currentWaterProfile,
+    }),
+    [store.recipes, store.currentMedium, store.currentWaterProfile, method, stage],
+  );
+
+  React.useEffect(() => {
+    if (!availableRecipes.length) {
+      setSelectedRecipeId('');
+      return;
+    }
+    if (!availableRecipes.some(recipe => recipe.id === selectedRecipeId)) {
+      setSelectedRecipeId(availableRecipes[0].id);
+    }
+  }, [availableRecipes, selectedRecipeId]);
+
+  const selectedRecipe = availableRecipes.find(recipe => recipe.id === selectedRecipeId);
+  const executionSteps = useMemo(
+    () => selectedRecipe ? buildExecutionSteps(selectedRecipe, store.inventory) : [],
+    [selectedRecipe, store.inventory],
+  );
+
+  const warnings = useMemo(
+    () => selectedRecipe
+      ? validateRecipeContext(selectedRecipe, store.inventory, {
+          medium: store.currentMedium,
+          method,
+        })
+      : [],
+    [selectedRecipe, store.inventory, store.currentMedium, method],
+  );
+
+  const toolSet = useMemo(() => {
+    if (!selectedRecipe || selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) {
+      return allocateToolSet([], PHYSICAL_SYRINGES, allocationMode);
+    }
+    return allocateToolSet(
+      executionSteps.map(step => ({
+        productId: step.product.id,
+        volumeMl: step.ingredient.concentration * volume,
+      })),
+      PHYSICAL_SYRINGES,
+      allocationMode,
+    );
+  }, [selectedRecipe, executionSteps, volume, allocationMode]);
+
+  const totalMl = selectedRecipe?.method === ApplicationMethod.READY_TO_SPRAY
+    ? 0
+    : executionSteps.reduce((sum, step) => sum + step.ingredient.concentration * volume, 0);
+
+  const canExecute = Boolean(selectedRecipe) && warnings.length === 0 && toolSet.complete;
+
+  const execute = () => {
+    if (!selectedRecipe || !canExecute) return;
+
+    executionSteps.forEach(step => {
+      if (selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) return;
+      const amount = step.ingredient.concentration * volume;
+      if (amount > 0) store.deductFromInventory(step.product.id, amount);
+    });
+
+    store.addHistoryItem({
+      id: crypto.randomUUID(),
+      date: new Date().toLocaleString(),
+      volume,
+      recipeId: selectedRecipe.id,
+      method: selectedRecipe.method,
+      doses: Object.fromEntries(selectedRecipe.ingredients.map(i => [i.productId, i.concentration])),
+      totalMl,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+        <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Reality Lock UI v1</div>
+        <div className="mt-1 text-sm text-white/55">UI korzysta teraz z Recipe Engine i globalnego przydziału fizycznych strzykawek/pipet.</div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <ContextSelect label="Medium" value={store.currentMedium} onChange={v => store.updateMedium(v as Medium)}>
+          <option value={Medium.TERRA}>TERRA / SOIL</option>
+          <option value={Medium.COCO}>COCO</option>
+          <option value={Medium.HYDRO}>HYDRO</option>
+          <option value={Medium.CUSTOM}>CUSTOM</option>
+        </ContextSelect>
+        <ContextSelect label="Woda" value={store.currentWaterProfile} onChange={v => store.updateWater(v as WaterType)}>
+          <option value={WaterType.SOFT}>Miękka</option>
+          <option value={WaterType.HARD}>Twarda</option>
+          <option value={WaterType.RO}>RO</option>
+          <option value={WaterType.CUSTOM}>Własna</option>
+        </ContextSelect>
+        <ContextSelect label="Faza" value={stage} onChange={v => setStage(v as GrowthStage)}>
+          <option value={GrowthStage.SEEDLING}>Siewki / Klony</option>
+          <option value={GrowthStage.VEG}>Wegetacja</option>
+          <option value={GrowthStage.BLOOM}>Kwitnienie</option>
+          <option value={GrowthStage.FLUSH}>Płukanie</option>
+        </ContextSelect>
+        <ContextSelect label="Metoda" value={method} onChange={v => setMethod(v as ApplicationMethod)}>
+          <option value={ApplicationMethod.ROOT_FEED}>Nawożenie korzeniowe</option>
+          <option value={ApplicationMethod.FOLIAR}>Oprysk dolistny</option>
+          <option value={ApplicationMethod.READY_TO_SPRAY}>Gotowy oprysk</option>
+          <option value={ApplicationMethod.SOAK}>Moczenie</option>
+        </ContextSelect>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-12">
+        <section className="space-y-4 lg:col-span-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-white/55">Receptura</h2>
+            <div className="mt-4 space-y-2">
+              {!availableRecipes.length && (
+                <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">Brak receptur dla tego kontekstu.</div>
+              )}
+              {availableRecipes.map(recipe => (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  onClick={() => setSelectedRecipeId(recipe.id)}
+                  className={`w-full rounded-xl border p-4 text-left transition ${
+                    selectedRecipeId === recipe.id
+                      ? 'border-emerald-500/60 bg-emerald-500/10'
+                      : 'border-white/10 bg-black/40 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-sm font-bold">{recipe.name}</span>
+                    <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wider ${
+                      recipe.verificationStatus === 'VERIFIED'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : recipe.verificationStatus === 'CONFLICT'
+                          ? 'bg-red-500/15 text-red-300'
+                          : 'bg-amber-500/15 text-amber-300'
+                    }`}>
+                      {recipe.verificationStatus ?? 'UNVERIFIED'}
+                    </span>
+                  </div>
+                  {recipe.source && <div className="mt-2 text-[10px] text-white/35">{recipe.source} · {recipe.sourceDate}</div>}
+                </button>
+              ))}
+            </div>
+
+            {selectedRecipe && selectedRecipe.method !== ApplicationMethod.READY_TO_SPRAY && (
+              <div className="mt-6 border-t border-white/10 pt-5">
+                <div className="flex items-center justify-between text-xs font-bold text-white/45">
+                  <span>Ilość wody</span><span className="font-mono text-emerald-300">{volume} L</span>
+                </div>
+                <input className="mt-3 w-full accent-emerald-500" type="range" min="0.5" max="50" step="0.5" value={volume} onChange={e => setVolume(Number(e.target.value))} />
+                <div className="mt-5 grid grid-cols-3 gap-2">
+                  {ALLOCATION_MODES.map(mode => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => setAllocationMode(mode.value)}
+                      className={`rounded-lg border px-2 py-2 text-[10px] font-black uppercase ${
+                        allocationMode === mode.value
+                          ? 'border-emerald-500 bg-emerald-500 text-black'
+                          : 'border-white/10 bg-black/40 text-white/45'
+                      }`}
+                    >{mode.label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="lg:col-span-8">
+          <div className="min-h-[520px] rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/55">
+              <Beaker className="h-4 w-4 text-emerald-300" /> Taca robocza
+            </div>
+
+            {!selectedRecipe ? (
+              <div className="flex min-h-[420px] items-center justify-center text-sm text-white/25">Wybierz recepturę.</div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                {selectedRecipe.verificationStatus !== 'VERIFIED' && (
+                  <WarningBox tone="amber">Receptura jest oznaczona jako {selectedRecipe.verificationStatus ?? 'UNVERIFIED'}. Ten etap nie potwierdza dawek, tylko egzekwuje logikę aplikacji, kolejności i zasobów.</WarningBox>
+                )}
+                {selectedRecipe.notes && <WarningBox tone="blue">{selectedRecipe.notes}</WarningBox>}
+                {warnings.map(warning => <WarningBox key={`${warning.code}-${warning.productId}`} tone="red">{warning.message}</WarningBox>)}
+                {!toolSet.complete && (
+                  <WarningBox tone="red">
+                    Brak pełnego zestawu narzędzi. {toolSet.shortages.map(s => `${store.getProduct(s.productId)?.name ?? s.productId}: ${s.remainingMl} ml`).join(' · ')}
+                  </WarningBox>
+                )}
+
+                <div className="space-y-3">
+                  {executionSteps.map((step, index) => {
+                    const ready = selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY;
+                    const amount = ready ? 0 : step.ingredient.concentration * volume;
+                    const tools = toolSet.assignments[step.product.id] ?? [];
+                    return (
+                      <div key={step.product.id} className="rounded-xl border border-white/10 bg-black/50 p-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                          <div className="flex items-center gap-3 sm:min-w-[240px]">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 font-black text-black">{index + 1}</div>
+                            <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${step.product.color}`}>
+                              {ready ? <Wind className="h-5 w-5 text-black" /> : <Droplet className="h-5 w-5 text-black" />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold">{step.product.name}</div>
+                              {!ready && <div className="mt-1 text-[10px] uppercase tracking-wider text-white/35">{step.ingredient.concentration} ml/L · {amount.toFixed(2)} ml</div>}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-1 flex-wrap justify-start gap-2 sm:justify-end">
+                            {ready ? (
+                              <span className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-bold text-fuchsia-300">Bezpośrednia aplikacja</span>
+                            ) : tools.length ? tools.map(tool => (
+                              <span key={tool.instanceId} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                                <Syringe className="h-3.5 w-3.5 text-white/35" />
+                                <span className="text-white/45">{tool.type}</span>
+                                <strong className="font-mono text-emerald-300">{tool.amount} ml</strong>
+                                <span className="text-[9px] text-white/25">{tool.instanceId}</span>
+                              </span>
+                            )) : <span className="text-xs text-white/25">0 ml</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {selectedRecipe.method !== ApplicationMethod.READY_TO_SPRAY && (
+                  <div className="rounded-xl border border-white/10 bg-black/35 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Fizyczny zestaw</div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                      {toolSet.usage.map(tool => (
+                        <div key={tool.toolTypeId} className="rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                          <div className="text-[10px] text-white/40">{tool.label}</div>
+                          <div className="font-mono text-sm font-black text-emerald-300">{tool.used}/{tool.total}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-4 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Suma koncentratów</div>
+                    <div className="font-mono text-2xl font-black text-emerald-300">{totalMl.toFixed(2)} ml</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={execute}
+                    disabled={!canExecute}
+                    className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-black ${
+                      canExecute ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'cursor-not-allowed bg-white/10 text-white/25'
+                    }`}
+                  >
+                    <Play className="h-4 w-4 fill-current" /> Wykonaj mieszankę
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ContextSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+  return (
+    <label className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-white/35">{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value)} className="w-full bg-black px-3 py-2 text-sm outline-none">{children}</select>
+    </label>
+  );
+}
+
+function WarningBox({ tone, children }: { tone: 'amber' | 'red' | 'blue'; children: React.ReactNode }) {
+  const classes = tone === 'red'
+    ? 'border-red-500/20 bg-red-500/10 text-red-200'
+    : tone === 'blue'
+      ? 'border-blue-500/20 bg-blue-500/10 text-blue-200'
+      : 'border-amber-500/20 bg-amber-500/10 text-amber-200';
+  return (
+    <div className={`flex gap-3 rounded-xl border p-4 text-sm ${classes}`}>
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>{children}</div>
+    </div>
+  );
+}

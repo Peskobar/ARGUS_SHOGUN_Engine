@@ -72,4 +72,51 @@ const steps = buildExecutionSteps({
 }, products);
 assert.deepEqual(steps.map(step => step.product.id), ['silicon', 'calmag', 'base', 'roots']);
 
+// Real planner integration scenario: routing/order/allocation only.
+const plannerRecipes = [
+  {
+    id: 'terra-veg',
+    medium: ['TERRA'],
+    method: 'ROOT_FEED',
+    stage: 'VEG',
+    ingredients: [
+      { productId: 'base', concentration: 2 },
+      { productId: 'roots', concentration: 0.2 },
+      { productId: 'silicon', concentration: 1 },
+      { productId: 'calmag', concentration: 0.5 },
+    ],
+    isFactory: true,
+  },
+  {
+    id: 'geisha',
+    medium: ['TERRA'],
+    method: 'READY_TO_SPRAY',
+    stage: 'ALL',
+    ingredients: [],
+    isFactory: true,
+  },
+];
+const plannerSelection = filterRecipes(plannerRecipes, {
+  medium: 'TERRA',
+  method: 'ROOT_FEED',
+  stage: 'VEG',
+});
+assert.deepEqual(plannerSelection.map(r => r.id), ['terra-veg']);
+const plannerSteps = buildExecutionSteps(plannerSelection[0], products);
+assert.deepEqual(plannerSteps.map(step => step.product.id), ['silicon', 'calmag', 'base', 'roots']);
+const plannerAllocation = allocateToolSet(
+  plannerSteps.map(step => ({
+    productId: step.product.id,
+    volumeMl: step.ingredient.concentration * 5,
+  })),
+  tools,
+  'PRECISION',
+);
+assert.equal(plannerAllocation.complete, true);
+assert.equal(new Set(Object.values(plannerAllocation.assignments).flat().map(item => item.instanceId)).size, 4);
+assert.equal(
+  plannerSteps.reduce((sum, step) => sum + step.ingredient.concentration * 5, 0),
+  18.5,
+);
+
 console.log('backend smoke: PASS');
