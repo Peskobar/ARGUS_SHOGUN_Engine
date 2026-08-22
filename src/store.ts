@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { Product, Recipe, HistoryItem, Medium, WaterType } from './types';
 import { SHOGUN_PRODUCTS, FACTORY_RECIPES } from './data';
 
+const STATE_VERSION = 2;
+
 export interface AppState {
+  stateVersion: number;
   inventory: Product[];
   recipes: Recipe[];
   history: HistoryItem[];
@@ -11,11 +14,12 @@ export interface AppState {
 }
 
 const DEFAULT_STATE: AppState = {
+  stateVersion: STATE_VERSION,
   inventory: SHOGUN_PRODUCTS,
   recipes: FACTORY_RECIPES,
   history: [],
   currentMedium: Medium.TERRA,
-  currentWaterProfile: WaterType.SOFT
+  currentWaterProfile: WaterType.CUSTOM
 };
 
 export function useAppStore() {
@@ -24,10 +28,18 @@ export function useAppStore() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Merge with factory defaults to ensure new factory recipes/products are loaded if we update data
+        const isLegacyState = parsed.stateVersion !== STATE_VERSION;
+
+        // Merge with factory defaults to ensure new factory recipes/products are loaded if we update data.
+        // Older builds silently defaulted water to SOFT. We cannot know that from reality,
+        // so the v2 migration resets only that field to "unknown/custom" once.
         return {
           ...DEFAULT_STATE,
           ...parsed,
+          stateVersion: STATE_VERSION,
+          currentWaterProfile: isLegacyState
+            ? WaterType.CUSTOM
+            : (parsed.currentWaterProfile ?? DEFAULT_STATE.currentWaterProfile),
           inventory: mergeInventory(DEFAULT_STATE.inventory, parsed.inventory || []),
           recipes: mergeRecipes(DEFAULT_STATE.recipes, parsed.recipes || []),
         };
@@ -48,9 +60,9 @@ export function useAppStore() {
   const deductFromInventory = (productId: string, amount: number) => {
     setState(s => ({
       ...s,
-      inventory: s.inventory.map(p => 
-        p.id === productId 
-          ? { ...p, remainingCapacity: Math.max(0, p.remainingCapacity - amount) } 
+      inventory: s.inventory.map(p =>
+        p.id === productId
+          ? { ...p, remainingCapacity: Math.max(0, p.remainingCapacity - amount) }
           : p
       )
     }));
