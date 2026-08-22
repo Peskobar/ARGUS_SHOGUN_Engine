@@ -1,15 +1,27 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, Beaker, Droplet, Play, Syringe, Wind } from 'lucide-react';
+import { AlertCircle, Beaker, CheckCircle2, Droplet, Play, Syringe, Wind } from 'lucide-react';
 import { PHYSICAL_SYRINGES } from './data';
 import { buildExecutionSteps, filterRecipes, validateRecipeContext } from './recipeEngine';
 import { useAppStore } from './store';
 import { allocateToolSet } from './syringeEngine';
 import { AllocationMode, ApplicationMethod, GrowthStage, Medium, WaterType } from './types';
 
-const ALLOCATION_MODES: Array<{ value: AllocationMode; label: string }> = [
-  { value: 'PRECISION', label: 'Precyzja' },
-  { value: 'SPEED', label: 'Szybkość' },
-  { value: 'MIN_TOOLS', label: 'Minimum' },
+const ALLOCATION_MODES: Array<{ value: AllocationMode; label: string; description: string }> = [
+  {
+    value: 'PRECISION',
+    label: 'Precyzja',
+    description: 'Dobiera możliwie małe, wygodne narzędzia. To domyślny tryb do dokładnego odmierzania.',
+  },
+  {
+    value: 'SPEED',
+    label: 'Szybkość',
+    description: 'Preferuje szybki przydział i zwykłe strzykawki. Przy małych dawkach wynik może być taki sam jak w Precyzji.',
+  },
+  {
+    value: 'MIN_TOOLS',
+    label: 'Minimum narzędzi',
+    description: 'Próbuje oszczędzać liczbę zajętych narzędzi. Jeśli każda dawka mieści się w jednej strzykawce, wynik może być identyczny.',
+  },
 ];
 
 export default function PlannerV2() {
@@ -19,6 +31,9 @@ export default function PlannerV2() {
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [volume, setVolume] = useState(5);
   const [allocationMode, setAllocationMode] = useState<AllocationMode>('PRECISION');
+  const [executionActive, setExecutionActive] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+  const [executionMessage, setExecutionMessage] = useState('');
 
   const availableRecipes = useMemo(
     () => filterRecipes(store.recipes, {
@@ -39,6 +54,20 @@ export default function PlannerV2() {
       setSelectedRecipeId(availableRecipes[0].id);
     }
   }, [availableRecipes, selectedRecipeId]);
+
+  React.useEffect(() => {
+    setExecutionActive(false);
+    setCompletedSteps([]);
+    setExecutionMessage('');
+  }, [
+    selectedRecipeId,
+    volume,
+    allocationMode,
+    store.currentMedium,
+    store.currentWaterProfile,
+    method,
+    stage,
+  ]);
 
   const selectedRecipe = availableRecipes.find(recipe => recipe.id === selectedRecipeId);
   const executionSteps = useMemo(
@@ -70,14 +99,57 @@ export default function PlannerV2() {
     );
   }, [selectedRecipe, executionSteps, volume, allocationMode]);
 
+  const allocationSignatures = useMemo(() => {
+    if (!selectedRecipe || selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) return [];
+    return ALLOCATION_MODES.map(mode => {
+      const result = allocateToolSet(
+        executionSteps.map(step => ({
+          productId: step.product.id,
+          volumeMl: step.ingredient.concentration * volume,
+        })),
+        PHYSICAL_SYRINGES,
+        mode.value,
+      );
+      const signature = executionSteps.map(step =>
+        (result.assignments[step.product.id] ?? [])
+          .map(tool => `${tool.toolTypeId}:${tool.amount}`)
+          .join('|'),
+      ).join('||');
+      return signature;
+    });
+  }, [selectedRecipe, executionSteps, volume]);
+
+  const modesAreIdentical = allocationSignatures.length > 1
+    && new Set(allocationSignatures).size === 1;
+
+  const selectedMode = ALLOCATION_MODES.find(mode => mode.value === allocationMode)!;
+
   const totalMl = selectedRecipe?.method === ApplicationMethod.READY_TO_SPRAY
     ? 0
     : executionSteps.reduce((sum, step) => sum + step.ingredient.concentration * volume, 0);
 
-  const canExecute = Boolean(selectedRecipe) && warnings.length === 0 && toolSet.complete;
+  const canStart = Boolean(selectedRecipe)
+    && warnings.length === 0
+    && toolSet.complete
+    && executionSteps.length > 0;
 
-  const execute = () => {
-    if (!selectedRecipe || !canExecute) return;
+  const allStepsCompleted = executionSteps.length > 0
+    && completedSteps.length === executionSteps.length;
+
+  const startExecution = () => {
+    if (!canStart) return;
+    setCompletedSteps([]);
+    setExecutionActive(true);
+    setExecutionMessage('Tryb wykonania aktywny. Idź po kolei od kroku 1.');
+  };
+
+  const markStepDone = (productId: string, index: number) => {
+    if (!executionActive || index !== completedSteps.length) return;
+    setCompletedSteps(previous => [...previous, productId]);
+  };
+
+  const finalizeExecution = () => {
+    if (!selectedRecipe || !executionActive || !allStepsCompleted) return;
 
     executionSteps.forEach(step => {
       if (selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) return;
@@ -94,39 +166,61 @@ export default function PlannerV2() {
       doses: Object.fromEntries(selectedRecipe.ingredients.map(i => [i.productId, i.concentration])),
       totalMl,
     });
+
+    setExecutionActive(false);
+    setExecutionMessage('Gotowe. Operacja została zapisana w historii, a stan magazynu zaktualizowany.');
   };
 
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-        <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Reality Lock UI v1</div>
-        <div className="mt-1 text-sm text-white/55">UI korzysta teraz z Recipe Engine i globalnego przydziału fizycznych strzykawek/pipet.</div>
+        <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Reality Lock UI v1.1</div>
+        <div className="mt-1 text-sm text-white/55">Planer prowadzi po kolejności mieszania, pilnuje fizycznych narzędzi i zapisuje wykonanie krok po kroku.</div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <ContextSelect label="Medium" value={store.currentMedium} onChange={v => store.updateMedium(v as Medium)}>
-          <option value={Medium.TERRA}>TERRA / SOIL</option>
+        <ContextSelect
+          label="Medium"
+          value={store.currentMedium}
+          onChange={v => store.updateMedium(v as Medium)}
+          hint="Ziemia z perlitem nadal należy do profilu TERRA / SOIL. Perlit poprawia strukturę i napowietrzenie, ale nie tworzy osobnej linii nawożenia."
+        >
+          <option value={Medium.TERRA}>TERRA / SOIL + PERLIT</option>
           <option value={Medium.COCO}>COCO</option>
           <option value={Medium.HYDRO}>HYDRO</option>
-          <option value={Medium.CUSTOM}>CUSTOM</option>
+          <option value={Medium.CUSTOM}>WŁASNE MEDIUM</option>
         </ContextSelect>
-        <ContextSelect label="Woda" value={store.currentWaterProfile} onChange={v => store.updateWater(v as WaterType)}>
-          <option value={WaterType.SOFT}>Miękka</option>
-          <option value={WaterType.HARD}>Twarda</option>
-          <option value={WaterType.RO}>RO</option>
-          <option value={WaterType.CUSTOM}>Własna</option>
+
+        <ContextSelect
+          label="Woda"
+          value={store.currentWaterProfile}
+          onChange={v => store.updateWater(v as WaterType)}
+          hint="Kranówka może być miękka albo twarda. Jeśli nie znasz twardości, wybierz „Kranowa - nie wiem”."
+        >
+          <option value={WaterType.CUSTOM}>Kranowa - nie wiem / własna</option>
+          <option value={WaterType.SOFT}>Kranowa miękka (SOFT)</option>
+          <option value={WaterType.HARD}>Kranowa twarda (HARD)</option>
+          <option value={WaterType.RO}>RO / demineralizowana</option>
         </ContextSelect>
+
         <ContextSelect label="Faza" value={stage} onChange={v => setStage(v as GrowthStage)}>
           <option value={GrowthStage.SEEDLING}>Siewki / Klony</option>
           <option value={GrowthStage.VEG}>Wegetacja</option>
           <option value={GrowthStage.BLOOM}>Kwitnienie</option>
           <option value={GrowthStage.FLUSH}>Płukanie</option>
         </ContextSelect>
-        <ContextSelect label="Metoda" value={method} onChange={v => setMethod(v as ApplicationMethod)}>
+
+        <ContextSelect
+          label="Metoda"
+          value={method}
+          onChange={v => setMethod(v as ApplicationMethod)}
+          hint="Lista metod jest kompletna. Brak receptury dla danej metody oznacza brak danych, a nie ukryty tryb."
+        >
           <option value={ApplicationMethod.ROOT_FEED}>Nawożenie korzeniowe</option>
           <option value={ApplicationMethod.FOLIAR}>Oprysk dolistny</option>
-          <option value={ApplicationMethod.READY_TO_SPRAY}>Gotowy oprysk</option>
-          <option value={ApplicationMethod.SOAK}>Moczenie</option>
+          <option value={ApplicationMethod.READY_TO_SPRAY}>Gotowy oprysk (RTS)</option>
+          <option value={ApplicationMethod.SOAK}>Moczenie / namaczanie</option>
+          <option value={ApplicationMethod.MEDIA_TREATMENT}>Dodatek do medium / podłoża</option>
         </ContextSelect>
       </div>
 
@@ -136,7 +230,9 @@ export default function PlannerV2() {
             <h2 className="text-xs font-black uppercase tracking-[0.18em] text-white/55">Receptura</h2>
             <div className="mt-4 space-y-2">
               {!availableRecipes.length && (
-                <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">Brak receptur dla tego kontekstu.</div>
+                <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">
+                  Brak receptur dla tego kontekstu. Nie zgadujemy dawek, więc ta sekcja będzie uzupełniana po audycie źródeł.
+                </div>
               )}
               {availableRecipes.map(recipe => (
                 <button
@@ -172,6 +268,7 @@ export default function PlannerV2() {
                   <span>Ilość wody</span><span className="font-mono text-emerald-300">{volume} L</span>
                 </div>
                 <input className="mt-3 w-full accent-emerald-500" type="range" min="0.5" max="50" step="0.5" value={volume} onChange={e => setVolume(Number(e.target.value))} />
+
                 <div className="mt-5 grid grid-cols-3 gap-2">
                   {ALLOCATION_MODES.map(mode => (
                     <button
@@ -186,6 +283,13 @@ export default function PlannerV2() {
                     >{mode.label}</button>
                   ))}
                 </div>
+
+                <div className="mt-3 rounded-xl border border-white/10 bg-black/35 p-3 text-xs text-white/50">
+                  <strong className="text-white/75">{selectedMode.label}:</strong> {selectedMode.description}
+                  {modesAreIdentical && (
+                    <div className="mt-2 text-amber-300/80">Dla tej objętości wszystkie trzy tryby dają ten sam fizyczny zestaw. To nie błąd.</div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -193,8 +297,15 @@ export default function PlannerV2() {
 
         <section className="lg:col-span-8">
           <div className="min-h-[520px] rounded-2xl border border-white/10 bg-white/5 p-5">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/55">
-              <Beaker className="h-4 w-4 text-emerald-300" /> Taca robocza
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/55">
+                <Beaker className="h-4 w-4 text-emerald-300" /> Taca robocza
+              </div>
+              {executionActive && (
+                <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                  Wykonanie {completedSteps.length}/{executionSteps.length}
+                </div>
+              )}
             </div>
 
             {!selectedRecipe ? (
@@ -215,17 +326,41 @@ export default function PlannerV2() {
                     Brak pełnego zestawu narzędzi. {toolSet.shortages.map(s => `${store.getProduct(s.productId)?.name ?? s.productId}: ${s.remainingMl} ml`).join(' · ')}
                   </WarningBox>
                 )}
+                {executionMessage && (
+                  <div className={`rounded-xl border p-4 text-sm ${
+                    executionActive
+                      ? 'border-blue-500/20 bg-blue-500/10 text-blue-200'
+                      : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                  }`}>
+                    {executionMessage}
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   {executionSteps.map((step, index) => {
                     const ready = selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY;
                     const amount = ready ? 0 : step.ingredient.concentration * volume;
                     const tools = toolSet.assignments[step.product.id] ?? [];
+                    const isDone = completedSteps.includes(step.product.id);
+                    const isCurrent = executionActive && index === completedSteps.length;
                     return (
-                      <div key={step.product.id} className="rounded-xl border border-white/10 bg-black/50 p-4">
+                      <div
+                        key={step.product.id}
+                        className={`rounded-xl border p-4 transition ${
+                          isDone
+                            ? 'border-emerald-500/35 bg-emerald-500/10'
+                            : isCurrent
+                              ? 'border-blue-500/40 bg-blue-500/10'
+                              : 'border-white/10 bg-black/50'
+                        }`}
+                      >
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                           <div className="flex items-center gap-3 sm:min-w-[240px]">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 font-black text-black">{index + 1}</div>
+                            <div className={`flex h-9 w-9 items-center justify-center rounded-full font-black ${
+                              isDone ? 'bg-emerald-500 text-black' : isCurrent ? 'bg-blue-500 text-black' : 'bg-white/10 text-white/50'
+                            }`}>
+                              {isDone ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+                            </div>
                             <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${step.product.color}`}>
                               {ready ? <Wind className="h-5 w-5 text-black" /> : <Droplet className="h-5 w-5 text-black" />}
                             </div>
@@ -246,6 +381,23 @@ export default function PlannerV2() {
                                 <span className="text-[9px] text-white/25">{tool.instanceId}</span>
                               </span>
                             )) : <span className="text-xs text-white/25">0 ml</span>}
+
+                            {executionActive && (
+                              <button
+                                type="button"
+                                disabled={!isCurrent || isDone}
+                                onClick={() => markStepDone(step.product.id, index)}
+                                className={`rounded-lg px-3 py-2 text-xs font-black uppercase ${
+                                  isDone
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : isCurrent
+                                      ? 'bg-blue-500 text-black'
+                                      : 'cursor-not-allowed bg-white/5 text-white/20'
+                                }`}
+                              >
+                                {isDone ? 'Wlano ✓' : ready ? 'Zastosowano' : 'Wlano'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -271,17 +423,34 @@ export default function PlannerV2() {
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Suma koncentratów</div>
                     <div className="font-mono text-2xl font-black text-emerald-300">{totalMl.toFixed(2)} ml</div>
+                    {selectedRecipe.method === ApplicationMethod.ROOT_FEED && (
+                      <div className="mt-1 text-[10px] text-white/35">Po wlaniu wszystkich składników: pomiar i korekta pH na końcu.</div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={execute}
-                    disabled={!canExecute}
-                    className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-black ${
-                      canExecute ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'cursor-not-allowed bg-white/10 text-white/25'
-                    }`}
-                  >
-                    <Play className="h-4 w-4 fill-current" /> Wykonaj mieszankę
-                  </button>
+
+                  {!executionActive ? (
+                    <button
+                      type="button"
+                      onClick={startExecution}
+                      disabled={!canStart}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-black ${
+                        canStart ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'cursor-not-allowed bg-white/10 text-white/25'
+                      }`}
+                    >
+                      <Play className="h-4 w-4 fill-current" /> Rozpocznij wykonanie
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={finalizeExecution}
+                      disabled={!allStepsCompleted}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-black ${
+                        allStepsCompleted ? 'bg-emerald-500 text-black hover:bg-emerald-400' : 'cursor-not-allowed bg-white/10 text-white/25'
+                      }`}
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Zakończ i zapisz
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -292,11 +461,24 @@ export default function PlannerV2() {
   );
 }
 
-function ContextSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+function ContextSelect({
+  label,
+  value,
+  onChange,
+  children,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+  hint?: string;
+}) {
   return (
     <label className="rounded-xl border border-white/10 bg-white/5 p-3">
       <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-white/35">{label}</span>
       <select value={value} onChange={e => onChange(e.target.value)} className="w-full bg-black px-3 py-2 text-sm outline-none">{children}</select>
+      {hint && <span className="mt-2 block text-[10px] leading-relaxed text-white/30">{hint}</span>}
     </label>
   );
 }
