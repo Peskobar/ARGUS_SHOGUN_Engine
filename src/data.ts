@@ -1,8 +1,9 @@
-import { Product, Medium, ApplicationMethod, GrowthStage, Recipe, SyringeType } from './types';
+import { Product, Medium, ApplicationMethod, GrowthStage, MixingRole, Recipe, SyringeType } from './types';
 
 export const SHOGUN_PRODUCTS: Product[] = [
   {
     id: 'shogun-start',
+    mixingRole: MixingRole.BASE,
     name: 'Shogun Start',
     brand: 'SHOGUN',
     color: 'bg-emerald-300',
@@ -15,6 +16,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'samurai-terra-grow',
+    mixingRole: MixingRole.BASE,
     name: 'Samurai Terra Grow',
     brand: 'SHOGUN',
     color: 'bg-green-600',
@@ -27,6 +29,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'samurai-terra-bloom',
+    mixingRole: MixingRole.BASE,
     name: 'Samurai Terra Bloom',
     brand: 'SHOGUN',
     color: 'bg-orange-500',
@@ -39,6 +42,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'katana-roots',
+    mixingRole: MixingRole.ROOTS,
     name: 'Katana Roots',
     brand: 'SHOGUN',
     color: 'bg-amber-700',
@@ -51,6 +55,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'zenzym',
+    mixingRole: MixingRole.ENZYME,
     name: 'Zenzym',
     brand: 'SHOGUN',
     color: 'bg-yellow-400',
@@ -63,6 +68,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'silicon',
+    mixingRole: MixingRole.SILICON,
     name: 'Silicon',
     brand: 'SHOGUN',
     color: 'bg-blue-300',
@@ -75,6 +81,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'calmag',
+    mixingRole: MixingRole.CALMAG,
     name: 'CalMag',
     brand: 'SHOGUN',
     color: 'bg-zinc-300',
@@ -87,6 +94,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'sumo-active-boost',
+    mixingRole: MixingRole.BOOSTER,
     name: 'Sumo Active Boost',
     brand: 'SHOGUN',
     color: 'bg-red-500',
@@ -99,6 +107,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'pk-warrior',
+    mixingRole: MixingRole.PK,
     name: 'PK Warrior 9/18',
     brand: 'SHOGUN',
     color: 'bg-pink-600',
@@ -111,6 +120,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'geisha-foliar',
+    mixingRole: MixingRole.READY_TO_USE,
     name: 'Geisha Foliar',
     brand: 'SHOGUN',
     color: 'bg-fuchsia-400',
@@ -123,6 +133,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
   },
   {
     id: 'myco-bio',
+    mixingRole: MixingRole.BIOLOGICAL,
     name: 'Mycorrhiza Bio',
     brand: 'CUSTOM',
     color: 'bg-stone-500',
@@ -143,6 +154,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.ROOT_FEED,
     stage: GrowthStage.VEG,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Feedchart',
     sourceDate: '2025-01-01',
     ingredients: [
@@ -159,6 +171,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.ROOT_FEED,
     stage: GrowthStage.BLOOM,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Feedchart',
     sourceDate: '2025-01-01',
     ingredients: [
@@ -176,6 +189,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.ROOT_FEED,
     stage: GrowthStage.BLOOM,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Feedchart',
     sourceDate: '2025-01-01',
     ingredients: [
@@ -194,6 +208,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.READY_TO_SPRAY,
     stage: GrowthStage.ALL,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Product Page',
     sourceDate: '2025-01-01',
     notes: 'Stosować co 14 dni od początku kwitnienia. NIE ROZCIEŃCZAĆ.',
@@ -208,6 +223,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.FOLIAR,
     stage: GrowthStage.ALL,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Product Page',
     sourceDate: '2025-01-01',
     notes: 'Stosować na liście w przypadku niedoborów, max co 7 dni.',
@@ -222,6 +238,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.FOLIAR,
     stage: GrowthStage.BLOOM,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Product Page',
     sourceDate: '2025-01-01',
     notes: 'Oprysk od początku formowania kwiatów do połowy kwitnienia.',
@@ -236,6 +253,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     method: ApplicationMethod.FOLIAR,
     stage: GrowthStage.VEG,
     isFactory: true,
+    verificationStatus: 'UNVERIFIED',
     source: 'SHOGUN Technical Docs',
     sourceDate: '2025-01-01',
     notes: 'Tylko dla zestresowanych lub ukorzeniających się klonów.',

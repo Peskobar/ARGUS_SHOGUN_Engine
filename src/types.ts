@@ -28,6 +28,23 @@ export enum GrowthStage {
   ALL = 'ALL'
 }
 
+export enum MixingRole {
+  SILICON = 'SILICON',
+  CALMAG = 'CALMAG',
+  BASE = 'BASE',
+  ROOTS = 'ROOTS',
+  ENZYME = 'ENZYME',
+  BOOSTER = 'BOOSTER',
+  PK = 'PK',
+  BIOLOGICAL = 'BIOLOGICAL',
+  READY_TO_USE = 'READY_TO_USE',
+  OTHER = 'OTHER',
+  PH_ADJUSTER = 'PH_ADJUSTER'
+}
+
+export type RecipeVerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'CONFLICT';
+export type AllocationMode = 'PRECISION' | 'SPEED' | 'MIN_TOOLS';
+
 export interface Product {
   id: string;
   name: string;
@@ -39,11 +56,13 @@ export interface Product {
   foliarAllowed: boolean;
   compatibleMedia: Medium[];
   type: 'FERTILIZER' | 'ADDITIVE' | 'BIOLOGICAL' | 'READY_TO_USE';
+  mixingRole?: MixingRole;
 }
 
 export interface RecipeIngredient {
   productId: string;
   concentration: number; // ml/L, 0 if READY_TO_SPRAY
+  mixOrder?: number;
 }
 
 export interface Recipe {
@@ -53,8 +72,11 @@ export interface Recipe {
   method: ApplicationMethod;
   stage: GrowthStage;
   ingredients: RecipeIngredient[];
+  waterProfiles?: WaterType[];
   source?: string;
   sourceDate?: string;
+  sourceUrl?: string;
+  verificationStatus?: RecipeVerificationStatus;
   isFactory: boolean;
   notes?: string;
 }
@@ -65,6 +87,7 @@ export interface SyringeType {
   count: number;
   label: string;
   type: 'SYRINGE' | 'PIPETTE';
+  precisionStep?: number;
 }
 
 export interface HistoryItem {
