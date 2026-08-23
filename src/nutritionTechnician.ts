@@ -17,6 +17,7 @@ import {
   classifyShogunWaterFromMeasuredEc,
   getManufacturerScheduleSignals,
 } from './nutritionEvidencePolicy';
+import { SHOGUN_START_EVIDENCE, getSupplementalEvidenceRef } from './supplementalEvidence';
 
 export interface NutritionContext {
   stage: GrowthStage;
@@ -27,10 +28,7 @@ export interface NutritionContext {
   medium: string;
   allowBaseOmit?: boolean;
   environment?: FeedingEnvironment;
-  /**
-   * Stays false until the exact current SHOGUN Light/Standard/Heavy chart
-   * used by a dose window has been captured and versioned.
-   */
+  /** Stays false until exact current SHOGUN Light/Standard/Heavy chart provenance is versioned. */
   scheduleProfileResolved?: boolean;
 }
 
@@ -64,16 +62,21 @@ export interface WeeklyNutritionPlan {
   systemWarnings: string[];
 }
 
+const ALL_PRODUCT_EVIDENCE: ProductEvidence[] = [SHOGUN_START_EVIDENCE, ...TERRA_EVIDENCE_MATRIX];
+
+function resolveProductEvidence(productId: string) {
+  return getProductEvidence(productId) ?? (productId === SHOGUN_START_EVIDENCE.productId ? SHOGUN_START_EVIDENCE : undefined);
+}
+
 function refsFor(evidence: ProductEvidence) {
-  return evidence.refs.map(getEvidenceRef).filter((ref): ref is EvidenceRef => Boolean(ref));
+  return evidence.refs
+    .map(id => getEvidenceRef(id) ?? getSupplementalEvidenceRef(id))
+    .filter((ref): ref is EvidenceRef => Boolean(ref));
 }
 
 function confidenceFor(evidence: ProductEvidence, context: NutritionContext): ProductDecision['confidence'] {
   if (evidence.status !== 'VERIFIED') return 'LOW';
   if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) return 'MEDIUM';
-  // Manufacturer dose windows are source-backed, but until the current
-  // Light/Standard/Heavy schedule provenance is attached to each window,
-  // the final choice of a numeric dose is intentionally not HIGH confidence.
   if (context.scheduleProfileResolved !== true) return 'MEDIUM';
   return 'HIGH';
 }
@@ -90,17 +93,23 @@ function candidateDoseWindows(evidence: ProductEvidence, context: NutritionConte
   // not an every-feed root-dose window. It is surfaced via applicationProtocols.
   if (evidence.productId === 'katana-roots' && context.stage === GrowthStage.SEEDLING) return [];
 
+  const directFilter = (window: ProductEvidence['manufacturerDoseWindows'][number]) =>
+    (window.stage === context.stage || window.stage === GrowthStage.ALL)
+    && context.week >= window.weekStart
+    && context.week <= window.weekEnd;
+
+  // Supplemental evidence is not stored in evidenceMatrix.getDoseWindow.
+  if (evidence.productId === SHOGUN_START_EVIDENCE.productId) {
+    return evidence.manufacturerDoseWindows.filter(directFilter);
+  }
+
   if (context.waterType !== WaterType.CUSTOM && context.waterType !== WaterType.RO) {
     return getDoseWindow(evidence.productId, context.stage, context.week, context.waterType);
   }
 
   // Unknown/RO water must not make the base disappear. Show direct candidates
   // and force the caller to resolve the water context rather than silently mapping it.
-  return evidence.manufacturerDoseWindows.filter(window =>
-    (window.stage === context.stage || window.stage === GrowthStage.ALL)
-    && context.week >= window.weekStart
-    && context.week <= window.weekEnd,
-  );
+  return evidence.manufacturerDoseWindows.filter(directFilter);
 }
 
 export function evaluateProductDecision(
@@ -108,7 +117,7 @@ export function evaluateProductDecision(
   context: NutritionContext,
   scenario: DecisionScenario = 'BASELINE',
 ): ProductDecision | null {
-  const evidence = getProductEvidence(productId);
+  const evidence = resolveProductEvidence(productId);
   if (!evidence) return null;
 
   const doseWindows = candidateDoseWindows(evidence, context);
@@ -125,7 +134,7 @@ export function evaluateProductDecision(
   }
 
   if (context.scheduleProfileResolved !== true && doseWindows.length > 0) {
-    unresolved.push('Dawka ma zweryfikowane źródło, ale nie ma jeszcze przypiętej wersji profilu SHOGUN Light/Standard/Heavy. Do czasu audytu profilu decyzja liczbowa pozostaje MEDIUM confidence.');
+    unresolved.push('Dawka ma źródło producenta, ale nie ma jeszcze przypiętej wersji profilu SHOGUN Light/Standard/Heavy. Do czasu audytu profilu decyzja liczbowa nie otrzymuje HIGH confidence.');
   }
 
   if (scenario === 'MORE') {
@@ -177,9 +186,7 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     }
   } else if (context.waterType === WaterType.CUSTOM) {
     waterStatus = 'REFERENCE_ONLY';
-    waterNotes.push(
-      `Lokalna analiza Emmerich: ok. ${EMmerichWaterReference.backgroundEcMsCmApprox.toFixed(2)} mS/cm, ${EMmerichWaterReference.hardnessDh} °dH, Ca ${EMmerichWaterReference.calciumMgL} mg/L, Mg ${EMmerichWaterReference.magnesiumMgL} mg/L. To tylko referencja sieciowa.`,
-    );
+    waterNotes.push(`Lokalna analiza Emmerich: ok. ${EMmerichWaterReference.backgroundEcMsCmApprox.toFixed(2)} mS/cm, ${EMmerichWaterReference.hardnessDh} °dH, Ca ${EMmerichWaterReference.calciumMgL} mg/L, Mg ${EMmerichWaterReference.magnesiumMgL} mg/L. To tylko referencja sieciowa.`);
     waterNotes.push('Zmierz EC swojej kranówki przed wyborem wariantu zależnego od wody.');
   }
 
@@ -207,7 +214,7 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     systemWarnings.push('Evidence Matrix v1 jest zatwierdzona wyłącznie dla kontekstu TERRA/SOIL + perlit.');
   }
 
-  const products = TERRA_EVIDENCE_MATRIX
+  const products = ALL_PRODUCT_EVIDENCE
     .map(entry => evaluateProductDecision(entry.productId, context, 'BASELINE'))
     .filter((decision): decision is ProductDecision => Boolean(decision))
     .filter(decision => decision.doseWindows.length > 0);
@@ -220,6 +227,12 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   const hasBloomBase = products.some(product => product.productId === 'samurai-terra-bloom');
   if (hasPk && hasBloomBase) {
     systemWarnings.push('PK Warrior + Bloom base: nie wykonuj automatycznie dodatkowego −25–50%. Najpierw ustal, czy dawka Bloom pochodzi z kompletnego feedchartu, czy ze standalone rate; inaczej grozi podwójna korekta.');
+  }
+
+  const hasStart = products.some(product => product.productId === 'shogun-start');
+  const hasGrow = products.some(product => product.productId === 'samurai-terra-grow');
+  if (hasStart && hasGrow) {
+    systemWarnings.push('SHOGUN Start i Terra Grow mają nakładające się źródła dla wczesnej wegetacji. Nie sumuj ich automatycznie. Current Start page mówi 4 ml/L przez pierwsze 2 tygodnie early veg, podczas gdy statyczny feedchart inaczej rozdziela etap propagacji. Wymagany wynik aktualnego kalkulatora.');
   }
 
   return {
