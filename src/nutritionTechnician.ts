@@ -16,7 +16,8 @@ export interface NutritionContext {
   waterType: WaterType;
   backgroundEc?: number;
   measuredPh?: number;
-  medium: 'TERRA_SOIL_PERLITE';
+  medium: string;
+  allowBaseOmit?: boolean;
 }
 
 export interface ProductDecision {
@@ -62,6 +63,20 @@ function scenarioText(evidence: ProductEvidence, scenario: DecisionScenario) {
   return evidence.why;
 }
 
+function candidateDoseWindows(evidence: ProductEvidence, context: NutritionContext) {
+  if (context.waterType !== WaterType.CUSTOM && context.waterType !== WaterType.RO) {
+    return getDoseWindow(evidence.productId, context.stage, context.week, context.waterType);
+  }
+
+  // Unknown/RO water must not make the base disappear. Show all direct candidates
+  // for the stage/week and force the caller to resolve the water context explicitly.
+  return evidence.manufacturerDoseWindows.filter(window =>
+    (window.stage === context.stage || window.stage === GrowthStage.ALL)
+    && context.week >= window.weekStart
+    && context.week <= window.weekEnd,
+  );
+}
+
 export function evaluateProductDecision(
   productId: string,
   context: NutritionContext,
@@ -70,17 +85,17 @@ export function evaluateProductDecision(
   const evidence = getProductEvidence(productId);
   if (!evidence) return null;
 
-  const doseWindows = getDoseWindow(productId, context.stage, context.week, context.waterType);
+  const doseWindows = candidateDoseWindows(evidence, context);
   const unresolved = [...(evidence.unresolved ?? [])];
   const hardRules = [...(evidence.hardRules ?? [])];
   const decisionText = [...scenarioText(evidence, scenario)];
 
   if (context.waterType === WaterType.CUSTOM) {
-    unresolved.push('Profil wody CUSTOM: przed wyborem dawki zależnej od wody potrzebny jest realny pomiar background EC.');
+    unresolved.push('Profil wody CUSTOM: pokazujemy kandydatów HARD/SOFT, ale wybór końcowej dawki zależnej od wody wymaga realnego background EC.');
   }
 
   if (context.waterType === WaterType.RO) {
-    unresolved.push('RO nie jest automatycznie mapowane na SOFT w Evidence Matrix v1. Użyj danych producenta z kalkulatora lub realnego background EC.');
+    unresolved.push('RO nie jest automatycznie mapowane na SOFT w Evidence Matrix v1. Kandydaci są informacyjni; użyj danych producenta z kalkulatora lub realnego background EC.');
   }
 
   if (scenario === 'MORE') {
@@ -93,7 +108,7 @@ export function evaluateProductDecision(
 
   const blocked = evidence.role === 'BASE'
     && scenario === 'OMIT'
-    && !unresolved.includes('OVERRIDE_CONFIRMED');
+    && context.allowBaseOmit !== true;
 
   return {
     productId,
@@ -128,7 +143,7 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   }
 
   if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) {
-    systemWarnings.push('Nie wybieramy automatycznie tabeli HARD/SOFT bez danych producenta lub realnego background EC.');
+    systemWarnings.push('Nie wybieramy automatycznie tabeli HARD/SOFT bez danych producenta lub jawnie rozstrzygniętego profilu wody.');
   }
 
   if (context.medium !== 'TERRA_SOIL_PERLITE') {
