@@ -31,9 +31,10 @@ export interface FeedingEnvironment {
 }
 
 export const PRODUCT_VERIFICATION: Record<string, VerificationDimensions> = {
+  'shogun-start': { doseStatus: 'CONFLICT', processStatus: 'VERIFIED', compositionStatus: 'PARTIAL', scienceGuardrailStatus: 'PARTIAL' },
   'samurai-terra-grow': { doseStatus: 'VERIFIED', processStatus: 'VERIFIED', compositionStatus: 'PARTIAL', scienceGuardrailStatus: 'VERIFIED' },
   'samurai-terra-bloom': { doseStatus: 'VERIFIED', processStatus: 'VERIFIED', compositionStatus: 'PARTIAL', scienceGuardrailStatus: 'VERIFIED' },
-  'katana-roots': { doseStatus: 'VERIFIED', processStatus: 'PARTIAL', compositionStatus: 'UNVERIFIED', scienceGuardrailStatus: 'PARTIAL' },
+  'katana-roots': { doseStatus: 'VERIFIED', processStatus: 'VERIFIED', compositionStatus: 'UNVERIFIED', scienceGuardrailStatus: 'PARTIAL' },
   zenzym: { doseStatus: 'VERIFIED', processStatus: 'VERIFIED', compositionStatus: 'PARTIAL', scienceGuardrailStatus: 'PARTIAL' },
   silicon: { doseStatus: 'VERIFIED', processStatus: 'VERIFIED', compositionStatus: 'PARTIAL', scienceGuardrailStatus: 'VERIFIED' },
   calmag: { doseStatus: 'VERIFIED', processStatus: 'VERIFIED', compositionStatus: 'PARTIAL', scienceGuardrailStatus: 'VERIFIED' },
@@ -42,6 +43,15 @@ export const PRODUCT_VERIFICATION: Record<string, VerificationDimensions> = {
 };
 
 export const APPLICATION_PROTOCOLS: ApplicationProtocolEvidence[] = [
+  {
+    productId: 'shogun-start',
+    stage: GrowthStage.SEEDLING,
+    concentrationMlPerL: 4,
+    method: 'SOAK',
+    cadence: 'ONCE',
+    note: 'Current SHOGUN Start page: pre-soak seedling/cutting cubes in a 4 ml/L solution. No soak duration is specified on the current page.',
+    sourceUrl: 'https://www.shogunfertilisers.com/products/start',
+  },
   {
     productId: 'katana-roots',
     stage: GrowthStage.SEEDLING,
@@ -64,6 +74,19 @@ export const APPLICATION_PROTOCOLS: ApplicationProtocolEvidence[] = [
 ];
 
 export const PARTIAL_SDS_COMPOSITION = {
+  'shogun-start': {
+    revision: '2024-10-15',
+    sourceUrl: 'https://cdn.shopify.com/s/files/1/0932/3692/0706/files/aqualabs_shogun-start_gb_sds_15_10_24.pdf',
+    disclosure: [
+      'nitric acid, ammonium calcium salt 5–10% w/w',
+      'magnesium nitrate 1–3% w/w',
+      'potassium nitrate 1–3% w/w',
+      'potassium dihydrogenorthophosphate 1–3% w/w',
+      'boric acid <0.25% w/w',
+    ],
+    productPh: 2.6,
+    densityGcm3: 1.105,
+  },
   'samurai-terra-grow': {
     revision: '2024-10-10',
     sourceUrl: 'https://cdn.shopify.com/s/files/1/0932/3692/0706/files/aqualabs_shogun-terragrow_gb_sds_10_10_24.pdf',
