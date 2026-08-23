@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { GrowthStage, WaterType } from '../src/types';
 import { buildWeeklyNutritionPlan, compareScenario, evaluateProductDecision } from '../src/nutritionTechnician';
 import { buildDryRunNutritionPlan, getDryRunDose } from '../src/dryRunNutritionPlan';
+import { buildNutritionExecutionHandoff } from '../src/nutritionExecutionBridge';
 import {
   MANUFACTURER_SOURCE_REGISTRY,
   TERRA_LED_2024_PROFILE,
@@ -201,5 +202,26 @@ const impossibleMix = resolveNutritionConflicts({
 });
 assert.ok(impossibleMix.blockers.some(blocker => blocker.code === 'GROW_BLOOM_TOGETHER'));
 assert.equal(impossibleMix.autoPlanAllowed, false);
+
+// Nutrition -> Planner boundary is intentionally fail-closed while independent gates are pending.
+const pendingHandoff = buildNutritionExecutionHandoff(ledBloom4, {
+  independentAgronomicAudit: 'PENDING',
+  securityReview: 'PENDING',
+  sourceReconciliation: 'PENDING',
+  humanApproval: false,
+});
+assert.equal(pendingHandoff.status, 'HOLD');
+assert.equal(pendingHandoff.automaticPlannerDispatchAllowed, false);
+assert.ok(pendingHandoff.blockers.some(blocker => blocker.includes('AGRONOMIC_AUDIT_PENDING')));
+assert.ok(pendingHandoff.blockers.some(blocker => blocker.includes('SECURITY_REVIEW_PENDING')));
+
+const reviewedHandoff = buildNutritionExecutionHandoff(ledBloom4, {
+  independentAgronomicAudit: 'PASS',
+  securityReview: 'PASS',
+  sourceReconciliation: 'PASS',
+  humanApproval: true,
+});
+assert.equal(reviewedHandoff.status, 'READY_FOR_HUMAN_APPROVAL');
+assert.equal(reviewedHandoff.automaticPlannerDispatchAllowed, false, 'even all-pass gates cannot auto-dispatch in v1 without a later reviewed code change');
 
 console.log('nutrition smoke: PASS');
