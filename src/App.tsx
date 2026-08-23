@@ -27,6 +27,7 @@ import {
   GrowthStage,
   Medium,
   Product,
+  Recipe,
   RecipeIngredient,
   WaterType,
 } from './types';
@@ -37,6 +38,7 @@ import {
   buildExecutionSteps,
   filterRecipes,
   findInventoryShortages,
+  orderIngredientsByRole,
   validateRecipeContext,
 } from './recipeEngine';
 
@@ -103,6 +105,8 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
   const [method, setMethod] = useState<ApplicationMethod>(ApplicationMethod.ROOT_FEED);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [volume, setVolume] = useState<number>(5);
+  const [readyToUseVolumeMl, setReadyToUseVolumeMl] = useState<number>(0);
+  const executionLock = React.useRef(false);
 
   const availableRecipes = useMemo(
     () => filterRecipes(store.recipes, {
@@ -118,8 +122,13 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
     const currentStillValid = availableRecipes.some(recipe => recipe.id === selectedRecipeId);
     if (!currentStillValid) {
       setSelectedRecipeId(availableRecipes[0]?.id ?? '');
+      setReadyToUseVolumeMl(0);
     }
   }, [availableRecipes, selectedRecipeId]);
+
+  React.useEffect(() => {
+    executionLock.current = false;
+  }, [store.inventory]);
 
   const selectedRecipe = useMemo(
     () => availableRecipes.find(recipe => recipe.id === selectedRecipeId),
@@ -139,7 +148,7 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
   const doseRequests = useMemo(() => {
     if (!selectedRecipe || selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) return [];
     return executionSteps
-      .filter(step => step.ingredient.concentration > 0)
+      .filter(step => step.ingredient.concentration > 0 && step.product.unit === 'ml')
       .map(step => ({
         productId: step.product.id,
         volumeMl: Number((step.ingredient.concentration * volume).toFixed(2)),
@@ -156,17 +165,19 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
 
     return executionSteps.map(step => {
       const totalVolumeRequired = selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY
-        ? 0
+        ? readyToUseVolumeMl
         : Number((step.ingredient.concentration * volume).toFixed(2));
 
       return {
         productId: step.product.id,
         product: step.product,
         totalVolumeRequired,
-        syringes: toolSet.assignments[step.product.id] ?? [],
+        syringes: selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY
+          ? []
+          : (toolSet.assignments[step.product.id] ?? []),
       } satisfies AllocationPlan & { product: Product };
     });
-  }, [selectedRecipe, executionSteps, volume, toolSet.assignments]);
+  }, [selectedRecipe, executionSteps, volume, readyToUseVolumeMl, toolSet.assignments]);
 
   const validationWarnings = useMemo(
     () => selectedRecipe
@@ -185,15 +196,39 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
     [selectedRecipe, store.inventory, volume],
   );
 
+  const directUseShortages = useMemo(() => {
+    if (!selectedRecipe || selectedRecipe.method !== ApplicationMethod.READY_TO_SPRAY || readyToUseVolumeMl <= 0) {
+      return [];
+    }
+
+    return executionSteps
+      .filter(step => step.product.remainingCapacity + 0.005 < readyToUseVolumeMl)
+      .map(step => ({
+        productId: step.product.id,
+        productName: step.product.name,
+        requiredMl: readyToUseVolumeMl,
+        availableMl: step.product.remainingCapacity,
+      }));
+  }, [selectedRecipe, executionSteps, readyToUseVolumeMl]);
+
   const totalMl = allocation.reduce((sum, item) => sum + item.totalVolumeRequired, 0);
   const blockingValidation = validationWarnings.filter(warning => warning.severity === 'ERROR');
   const hasToolShortage = selectedRecipe?.method !== ApplicationMethod.READY_TO_SPRAY && !toolSet.complete;
-  const isBlocked = blockingValidation.length > 0 || inventoryShortages.length > 0 || hasToolShortage;
+  const directUseQuantityMissing = selectedRecipe?.method === ApplicationMethod.READY_TO_SPRAY && readyToUseVolumeMl <= 0;
+  const isBlocked = (
+    blockingValidation.length > 0 ||
+    inventoryShortages.length > 0 ||
+    directUseShortages.length > 0 ||
+    hasToolShortage ||
+    directUseQuantityMissing
+  );
   const allocationByProduct = new Map(allocation.map(item => [item.productId, item]));
 
   const handleExecute = () => {
-    if (!selectedRecipe || isBlocked) return;
+    if (!selectedRecipe || isBlocked || executionLock.current) return;
+    executionLock.current = true;
 
+    const isReadyToSpray = selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY;
     const result = store.executeOperation(
       allocation
         .filter(item => item.totalVolumeRequired > 0)
@@ -201,7 +236,8 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
       {
         id: crypto.randomUUID(),
         date: new Date().toLocaleString(),
-        volume,
+        volume: isReadyToSpray ? readyToUseVolumeMl : volume,
+        volumeUnit: isReadyToSpray ? 'ml' : 'L',
         recipeId: selectedRecipe.id,
         method: selectedRecipe.method,
         doses: Object.fromEntries(selectedRecipe.ingredients.map(i => [i.productId, i.concentration])),
@@ -210,10 +246,12 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
     );
 
     if (!result.ok) {
+      executionLock.current = false;
       alert('Operacja zatrzymana: stan magazynu zmienił się i nie wystarcza do wykonania receptury.');
       return;
     }
 
+    if (isReadyToSpray) setReadyToUseVolumeMl(0);
     alert('Wykonano atomowo: magazyn i historia zostały zaktualizowane razem.');
   };
 
@@ -277,7 +315,10 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
                 <button
                   type="button"
                   key={recipe.id}
-                  onClick={() => setSelectedRecipeId(recipe.id)}
+                  onClick={() => {
+                    setSelectedRecipeId(recipe.id);
+                    setReadyToUseVolumeMl(0);
+                  }}
                   className={`w-full text-left p-4 rounded-xl border transition-all ${selectedRecipeId === recipe.id ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-black border-white/5 hover:border-white/20'}`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -314,6 +355,27 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
                 />
               </div>
             )}
+
+            {selectedRecipe?.method === ApplicationMethod.READY_TO_SPRAY && (
+              <div className="mt-8 pt-8 border-t border-white/10">
+                <label className="block text-xs font-bold text-white/40 uppercase tracking-wider mb-3">
+                  Zużycie gotowego preparatu
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={readyToUseVolumeMl || ''}
+                    onChange={event => setReadyToUseVolumeMl(Math.max(0, Number(event.target.value) || 0))}
+                    placeholder="np. 50"
+                    className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-fuchsia-500"
+                  />
+                  <span className="text-sm font-mono text-fuchsia-300">ml</span>
+                </div>
+                <p className="text-[10px] text-white/40 mt-2">Podaj rzeczywistą ilość zużytą bez rozcieńczania. Dopiero wtedy magazyn może zostać poprawnie odjęty.</p>
+              </div>
+            )}
           </div>
 
           {selectedRecipe && (
@@ -336,15 +398,27 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
                 />
               ))}
 
+              {directUseShortages.map(shortage => (
+                <StatusBox
+                  key={`direct-${shortage.productId}`}
+                  tone="error"
+                  text={`${shortage.productName}: chcesz zużyć ${shortage.requiredMl} ml, dostępne ${shortage.availableMl} ml.`}
+                />
+              ))}
+
+              {directUseQuantityMissing && (
+                <StatusBox tone="error" text="Podaj rzeczywistą ilość gotowego preparatu do zużycia." />
+              )}
+
               {toolSet.shortages.map(shortage => (
                 <StatusBox
                   key={`tool-${shortage.productId}`}
                   tone="error"
-                  text={`Brakuje fizycznych strzykawek/pipet dla ${store.getProduct(shortage.productId)?.name ?? shortage.productId}: ${shortage.remainingMl} ml bez przydziału.`}
+                  text={`Brakuje fizyczznych strzykawek/pipet dla ${store.getProduct(shortage.productId)?.name ?? shortage.productId}: ${shortage.remainingMl} ml bez przydziału.`}
                 />
               ))}
 
-              {validationWarnings.length === 0 && inventoryShortages.length === 0 && toolSet.shortages.length === 0 && (
+              {validationWarnings.length === 0 && inventoryShortages.length === 0 && directUseShortages.length === 0 && toolSet.shortages.length === 0 && !directUseQuantityMissing && (
                 <StatusBox tone="ok" text="Kontekst, magazyn i zestaw narzędzi przechodzą walidację." />
               )}
             </div>
@@ -408,7 +482,11 @@ function PlannerView({ store }: { store: ReturnType<typeof useAppStore> }) {
 
                         <div className="flex-1 min-w-[130px]">
                           <h4 className="font-bold text-sm">{step.product.name}</h4>
-                          {!isReadyToSpray && (
+                          {isReadyToSpray ? (
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
+                              zużycie bezpośrednie • {item?.totalVolumeRequired ?? 0} ml
+                            </p>
+                          ) : (
                             <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
                               {step.ingredient.concentration} ml/L • razem {item?.totalVolumeRequired ?? 0} ml
                             </p>
@@ -652,7 +730,7 @@ function HistoryView({ store }: { store: ReturnType<typeof useAppStore> }) {
                 <div className="text-[10px] text-white/40 uppercase tracking-widest font-mono mb-1">{item.date}</div>
                 <div className="font-bold">{recipe ? recipe.name : 'Niestandardowa mieszanka'}</div>
                 <div className="text-xs text-emerald-400 font-mono mt-1">
-                  {item.method} • {item.volume} L wody • {item.totalMl.toFixed(1)} ml preparatów
+                  {item.method} • {item.volume} {item.volumeUnit ?? 'L'} • {item.totalMl.toFixed(1)} ml preparatów
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 text-[10px] text-white/60">
@@ -687,6 +765,7 @@ function BuilderView({
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
 
   const selectableProducts = store.inventory.filter(product => {
+    if (product.unit !== 'ml') return false;
     if (method === ApplicationMethod.FOLIAR) return product.foliarAllowed;
     if (method === ApplicationMethod.READY_TO_SPRAY) return product.type === 'READY_TO_USE';
     return true;
@@ -699,7 +778,20 @@ function BuilderView({
 
   const handleAddIngredient = (productId: string) => {
     if (ingredients.some(ingredient => ingredient.productId === productId)) return;
-    setIngredients(normalizeOrder([...ingredients, { productId, concentration: 1.0 }]));
+
+    const next = [
+      ...ingredients,
+      {
+        productId,
+        concentration: method === ApplicationMethod.READY_TO_SPRAY ? 0 : 1.0,
+      },
+    ];
+
+    setIngredients(
+      method === ApplicationMethod.ROOT_FEED
+        ? orderIngredientsByRole(next, store.inventory)
+        : normalizeOrder(next),
+    );
   };
 
   const updateIngredient = (productId: string, concentration: number) => {
@@ -726,7 +818,7 @@ function BuilderView({
       return;
     }
 
-    store.addRecipe({
+    const candidate: Recipe = {
       id: crypto.randomUUID(),
       name: name.trim(),
       medium: [medium],
@@ -737,8 +829,17 @@ function BuilderView({
       verificationStatus: 'UNVERIFIED',
       source: 'Custom User Recipe',
       sourceDate: new Date().toISOString().slice(0, 10),
-    });
+    };
 
+    const errors = validateRecipeContext(candidate, store.inventory, { medium, method })
+      .filter(warning => warning.severity === 'ERROR');
+
+    if (errors.length > 0) {
+      alert(`Nie zapisano: ${errors[0].message}`);
+      return;
+    }
+
+    store.addRecipe(candidate);
     alert('Zapisano recepturę jako UNVERIFIED.');
     setActiveTab('PLANNER');
   };
@@ -749,7 +850,7 @@ function BuilderView({
         <Settings className="w-6 h-6 text-emerald-400" />
         <div>
           <h2 className="text-xl font-bold">Kreator receptur</h2>
-          <p className="text-sm text-white/40">Kolejność ustawiona tutaj jest jawna i zapisuje się jako mixOrder. Nic nie jest już sortowane po nazwie produktu.</p>
+          <p className="text-sm text-white/40">ROOT_FEED startuje od bezpiecznego porządku ról. Ręczne przesunięcie zapisuje jawny mixOrder, ale Reality Lock nie pozwoli umieścić Silicon po nawozie bazowym.</p>
         </div>
       </div>
 
@@ -824,15 +925,21 @@ function BuilderView({
                     <button onClick={() => moveIngredient(index, -1)} disabled={index === 0} className="text-white/40 hover:text-white disabled:opacity-20"><ArrowUp className="w-3 h-3" /></button>
                     <button onClick={() => moveIngredient(index, 1)} disabled={index === ingredients.length - 1} className="text-white/40 hover:text-white disabled:opacity-20"><ArrowDown className="w-3 h-3" /></button>
                   </div>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={ingredient.concentration}
-                    onChange={event => updateIngredient(ingredient.productId, Math.max(0, Number(event.target.value) || 0))}
-                    className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-right text-sm"
-                  />
-                  <span className="text-xs text-white/40">ml/L</span>
+                  {method === ApplicationMethod.READY_TO_SPRAY ? (
+                    <span className="text-xs text-fuchsia-300 font-bold">RTS</span>
+                  ) : (
+                    <>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={ingredient.concentration}
+                        onChange={event => updateIngredient(ingredient.productId, Math.max(0, Number(event.target.value) || 0))}
+                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-right text-sm"
+                      />
+                      <span className="text-xs text-white/40">ml/L</span>
+                    </>
+                  )}
                   <button onClick={() => removeIngredient(ingredient.productId)} className="text-red-400 p-1 hover:bg-red-400/10 rounded-lg">×</button>
                 </div>
               );
