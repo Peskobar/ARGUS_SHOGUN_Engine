@@ -19,16 +19,20 @@ const hardVeg1 = buildWeeklyNutritionPlan({
 
 const hardVegIds = hardVeg1.products.map(product => product.productId);
 assert.ok(hardVegIds.includes('samurai-terra-grow'));
+assert.ok(hardVegIds.includes('shogun-start'), 'current Start page overlaps early veg and must be surfaced as a conflict, not hidden');
 assert.ok(hardVegIds.includes('katana-roots'));
 assert.ok(hardVegIds.includes('zenzym'));
 assert.ok(hardVegIds.includes('silicon'));
 assert.ok(hardVegIds.includes('calmag'));
 assert.ok(!hardVegIds.includes('pk-warrior'));
 assert.ok(!hardVegIds.includes('samurai-terra-bloom'));
+assert.ok(hardVeg1.systemWarnings.some(warning => warning.includes('Nie sumuj ich automatycznie')));
 
 const hardGrow = hardVeg1.products.find(product => product.productId === 'samurai-terra-grow')!;
 assert.deepEqual(hardGrow.doseWindows.map(window => [window.minMlPerL, window.maxMlPerL]), [[1, 2]]);
-assert.equal(hardGrow.confidence, 'HIGH');
+assert.equal(hardGrow.confidence, 'MEDIUM', 'schedule-profile provenance is intentionally unresolved');
+assert.equal(hardVeg1.manufacturerWaterClass, WaterType.HARD);
+assert.deepEqual(hardVeg1.scheduleSignals, ['UNRESOLVED']);
 
 const customVeg1 = buildWeeklyNutritionPlan({
   stage: GrowthStage.VEG,
@@ -41,6 +45,17 @@ assert.equal(customGrow.doseWindows.length, 2, 'unknown water must show HARD and
 assert.equal(customGrow.confidence, 'MEDIUM');
 assert.equal(customVeg1.waterStatus, 'REFERENCE_ONLY');
 assert.ok(customVeg1.systemWarnings.some(warning => warning.includes('HARD/SOFT')));
+
+const seedling = buildWeeklyNutritionPlan({
+  stage: GrowthStage.SEEDLING,
+  week: 1,
+  waterType: WaterType.HARD,
+  medium: 'TERRA_SOIL_PERLITE',
+});
+assert.ok(seedling.applicationProtocols.some(protocol => protocol.productId === 'shogun-start' && protocol.method === 'SOAK' && protocol.concentrationMlPerL === 4));
+assert.ok(seedling.applicationProtocols.some(protocol => protocol.productId === 'katana-roots' && protocol.method === 'SOAK' && protocol.durationMinutes === 15));
+assert.ok(seedling.applicationProtocols.some(protocol => protocol.productId === 'katana-roots' && protocol.method === 'ROOT_FEED' && protocol.cadence === 'WEEKLY'));
+assert.ok(!seedling.products.some(product => product.productId === 'katana-roots'), 'Katana seedling 5 ml/L must not be encoded as a generic every-feed dose');
 
 const softBloom4 = buildWeeklyNutritionPlan({
   stage: GrowthStage.BLOOM,
@@ -100,7 +115,9 @@ assert.equal(classifyShogunWaterFromMeasuredEc(0.4), 'BOUNDARY');
 assert.deepEqual(getManufacturerScheduleSignals({ leafTemperatureC: 27, relativeHumidity: 45 }), ['LIGHT']);
 assert.deepEqual(getManufacturerScheduleSignals({ leafTemperatureC: 24, relativeHumidity: 60 }), ['STANDARD']);
 assert.deepEqual(getManufacturerScheduleSignals({ usesLed: true }), ['HEAVY']);
+assert.deepEqual(getManufacturerScheduleSignals({ leafTemperatureC: 27, relativeHumidity: 45, usesLed: true }), ['LIGHT', 'HEAVY']);
 assert.equal(PRODUCT_VERIFICATION['samurai-terra-grow'].compositionStatus, 'PARTIAL');
+assert.equal(PRODUCT_VERIFICATION['shogun-start'].doseStatus, 'CONFLICT');
 assert.ok(APPLICATION_PROTOCOLS.some(protocol => protocol.productId === 'katana-roots' && protocol.method === 'SOAK' && protocol.durationMinutes === 15));
 assert.equal(pkBaseAdjustmentPolicy('INTEGRATED_FEEDCHART').requiresExplicitAdjustment, false);
 assert.equal(pkBaseAdjustmentPolicy('STANDALONE_PRODUCT_RATE').requiresExplicitAdjustment, true);
