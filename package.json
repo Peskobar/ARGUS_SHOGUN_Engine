@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "smoke:backend": "node --experimental-strip-types scripts/backend-smoke.mjs"
+    "smoke:backend": "node --experimental-strip-types scripts/backend-smoke.mjs",
+    "smoke:nutrition": "tsx scripts/nutrition-smoke.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
