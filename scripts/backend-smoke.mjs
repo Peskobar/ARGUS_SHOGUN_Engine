@@ -5,6 +5,7 @@ import {
   buildExecutionSteps,
   filterRecipes,
   findInventoryShortages,
+  orderIngredientsByRole,
   validateRecipeContext,
 } from '../src/recipeEngine.ts';
 
@@ -58,18 +59,19 @@ assert.deepEqual(
 );
 
 const products = [
-  { id: 'base', name: 'Base', compatibleMedia: ['TERRA'], type: 'FERTILIZER', mixingRole: 'BASE' },
-  { id: 'silicon', name: 'Silicon', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'SILICON' },
-  { id: 'roots', name: 'Roots', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'ROOTS' },
-  { id: 'calmag', name: 'CalMag', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'CALMAG' },
+  { id: 'base', name: 'Base', compatibleMedia: ['TERRA'], type: 'FERTILIZER', mixingRole: 'BASE', unit: 'ml' },
+  { id: 'silicon', name: 'Silicon', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'SILICON', unit: 'ml' },
+  { id: 'roots', name: 'Roots', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'ROOTS', unit: 'ml' },
+  { id: 'calmag', name: 'CalMag', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'CALMAG', unit: 'ml' },
+  { id: 'myco', name: 'Myco', compatibleMedia: ['TERRA'], type: 'BIOLOGICAL', mixingRole: 'BIOLOGICAL', unit: 'g' },
+  { id: 'rts', name: 'RTS', compatibleMedia: ['TERRA'], type: 'READY_TO_USE', mixingRole: 'READY_TO_USE', unit: 'ml' },
 ].map(product => ({
   ...product,
   brand: 'TEST',
   color: '',
   initialCapacity: 1000,
   remainingCapacity: 1000,
-  unit: 'ml',
-  foliarAllowed: false,
+  foliarAllowed: product.id === 'rts',
 }));
 
 const mixRecipe = {
@@ -91,13 +93,23 @@ const mixRecipe = {
 const steps = buildExecutionSteps(mixRecipe, products);
 assert.deepEqual(steps.map(step => step.product.id), ['silicon', 'calmag', 'base', 'roots']);
 
+const canonical = orderIngredientsByRole(
+  [
+    { productId: 'base', concentration: 2 },
+    { productId: 'roots', concentration: 0.2 },
+    { productId: 'silicon', concentration: 1 },
+  ],
+  products,
+);
+assert.deepEqual(canonical.map(ingredient => ingredient.productId), ['silicon', 'base', 'roots']);
+assert.deepEqual(canonical.map(ingredient => ingredient.mixOrder), [100, 200, 300]);
+
 const protocol = buildExecutionProtocol(mixRecipe, products);
 assert.deepEqual(
   protocol.map(step => step.kind === 'PRODUCT' ? step.product.id : step.id),
   ['water-start', 'silicon', 'post-silicon-ph', 'calmag', 'base', 'roots', 'final-ec', 'final-ph'],
 );
 
-// Regression: explicit custom ordering must never move the pH checkpoint before Silicon.
 const explicitOrderRecipe = {
   ...mixRecipe,
   id: 'explicit-order',
@@ -113,6 +125,11 @@ assert.deepEqual(
   explicitProtocol.map(step => step.kind === 'PRODUCT' ? step.product.id : step.id),
   ['water-start', 'base', 'silicon', 'post-silicon-ph', 'roots', 'final-ec', 'final-ph'],
 );
+const explicitWarnings = validateRecipeContext(explicitOrderRecipe, products, {
+  medium: 'TERRA',
+  method: 'ROOT_FEED',
+});
+assert.equal(explicitWarnings.some(warning => warning.code === 'SILICON_AFTER_BASE' && warning.severity === 'ERROR'), true);
 
 const warnings = validateRecipeContext(mixRecipe, products, {
   medium: 'TERRA',
@@ -126,6 +143,32 @@ const conflictWarnings = validateRecipeContext(
   { medium: 'TERRA', method: 'ROOT_FEED' },
 );
 assert.equal(conflictWarnings.some(warning => warning.code === 'RECIPE_CONFLICT' && warning.severity === 'ERROR'), true);
+
+const unsupportedUnitWarnings = validateRecipeContext(
+  {
+    ...mixRecipe,
+    id: 'myco-dose',
+    ingredients: [{ productId: 'myco', concentration: 1 }],
+  },
+  products,
+  { medium: 'TERRA', method: 'ROOT_FEED' },
+);
+assert.equal(unsupportedUnitWarnings.some(warning => warning.code === 'UNSUPPORTED_DOSING_UNIT'), true);
+
+const invalidRtsWarnings = validateRecipeContext(
+  {
+    ...mixRecipe,
+    id: 'bad-rts',
+    method: 'READY_TO_SPRAY',
+    ingredients: [
+      { productId: 'rts', concentration: 0 },
+      { productId: 'base', concentration: 0 },
+    ],
+  },
+  products,
+  { medium: 'TERRA', method: 'READY_TO_SPRAY' },
+);
+assert.equal(invalidRtsWarnings.some(warning => warning.code === 'READY_TO_SPRAY_INGREDIENT_COUNT'), true);
 
 const lowStockProducts = products.map(product =>
   product.id === 'base' ? { ...product, remainingCapacity: 5 } : product,
