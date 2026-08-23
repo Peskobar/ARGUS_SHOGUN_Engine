@@ -1,4 +1,5 @@
 import { DryRunNutritionPlan } from './dryRunNutritionPlan';
+import { EXECUTION_HAZARD_LOCKS, WORK_AUDIT_VERDICT } from './nutritionAuditLock';
 
 export type ReleaseGateStatus = 'PENDING' | 'PASS' | 'FAIL';
 export type NutritionExecutionStatus = 'HOLD' | 'READY_FOR_HUMAN_APPROVAL';
@@ -24,18 +25,20 @@ export interface NutritionExecutionHandoff {
   doses: NutritionExecutionDose[];
   blockers: string[];
   warnings: string[];
+  hazardLocks: typeof EXECUTION_HAZARD_LOCKS;
   releaseGates: NutritionReleaseGates;
+  automaticExecutionVerdict: 'NO_GO';
   /**
-   * Intentionally false in v1. Planner 2.2 must not accept automatic execution
-   * until a later reviewed change explicitly enables the bridge after all gates pass.
+   * Hard false by architecture. Nutrition Technician may eventually prepare a
+   * human-reviewed Planner candidate, but it does not auto-dispatch physical work.
    */
   automaticPlannerDispatchAllowed: false;
 }
 
 /**
- * Converts a dry-run plan into a typed handoff candidate. This is deliberately a
- * one-way boundary object, not a Planner mutation. It cannot deduct inventory,
- * write history or start physical execution.
+ * Converts a dry-run into a non-mutating handoff candidate. The independent Work
+ * audit keeps weekly plan HOLD and automatic execution NO-GO. Existing Planner 2.2
+ * remains a separate human-operated execution workflow.
  */
 export function buildNutritionExecutionHandoff(
   plan: DryRunNutritionPlan,
@@ -44,11 +47,13 @@ export function buildNutritionExecutionHandoff(
   const blockers: string[] = plan.blockers.map(finding => `${finding.code}: ${finding.action}`);
   const warnings: string[] = plan.warnings.map(finding => `${finding.code}: ${finding.action}`);
 
-  if (!plan.readyForExecutionCandidate) blockers.push('DRY_RUN_NOT_READY: manufacturer profile or conflict gate is not ready.');
+  if (!plan.readyForExecutionCandidate) blockers.push('DRY_RUN_NOT_READY: independent audit keeps weekly prescription HOLD.');
+  for (const reason of plan.abstentionReasons) blockers.push(`ABSTAIN_${reason.code}: ${reason.message}`);
   if (gates.independentAgronomicAudit !== 'PASS') blockers.push(`AGRONOMIC_AUDIT_${gates.independentAgronomicAudit}`);
   if (gates.securityReview !== 'PASS') blockers.push(`SECURITY_REVIEW_${gates.securityReview}`);
   if (gates.sourceReconciliation !== 'PASS') blockers.push(`SOURCE_RECONCILIATION_${gates.sourceReconciliation}`);
   if (!gates.humanApproval) blockers.push('HUMAN_APPROVAL_REQUIRED');
+  blockers.push(`AUTOMATIC_EXECUTION_${WORK_AUDIT_VERDICT.automaticExecution}`);
 
   const status: NutritionExecutionStatus = blockers.length === 0
     ? 'READY_FOR_HUMAN_APPROVAL'
@@ -66,7 +71,9 @@ export function buildNutritionExecutionHandoff(
     })),
     blockers,
     warnings,
+    hazardLocks: EXECUTION_HAZARD_LOCKS,
     releaseGates: gates,
+    automaticExecutionVerdict: 'NO_GO',
     automaticPlannerDispatchAllowed: false,
   };
 }
