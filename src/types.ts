@@ -44,14 +44,15 @@ export enum MixingRole {
 
 export type RecipeVerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'CONFLICT';
 export type AllocationMode = 'PRECISION' | 'SPEED' | 'MIN_TOOLS';
+export type ExecutionVolumeUnit = 'L' | 'ml';
 
 export interface Product {
   id: string;
   name: string;
   brand: string;
   color: string;
-  initialCapacity: number; // ml
-  remainingCapacity: number; // ml
+  initialCapacity: number;
+  remainingCapacity: number;
   unit: string;
   foliarAllowed: boolean;
   compatibleMedia: Medium[];
@@ -61,7 +62,9 @@ export interface Product {
 
 export interface RecipeIngredient {
   productId: string;
-  concentration: number; // ml/L, 0 if READY_TO_SPRAY
+  /** Current syringe engine supports liquid concentration in ml/L. */
+  concentration: number;
+  /** Optional explicit execution order. Lower values execute first. */
   mixOrder?: number;
 }
 
@@ -93,7 +96,9 @@ export interface SyringeType {
 export interface HistoryItem {
   id: string;
   date: string;
+  /** Carrier-water volume for diluted recipes, direct product volume for RTS. */
   volume: number;
+  volumeUnit?: ExecutionVolumeUnit;
   recipeId?: string;
   method: ApplicationMethod;
   doses: Record<string, number>;

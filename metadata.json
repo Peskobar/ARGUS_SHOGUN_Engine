@@ -1,5 +1,5 @@
 {
-  "name": "Planer Strzykawek - Mikstura 5L",
-  "description": "Aplikacja do planowania napełniania strzykawek dla mieszanek nawozowych.",
+  "name": "ARGUS SHOGUN Engine",
+  "description": "Evidence-aware execution planner with mixing protocol, Reality Lock validation and finite syringe allocation.",
   "requestFramePermissions": []
 }
