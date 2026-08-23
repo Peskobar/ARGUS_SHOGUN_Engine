@@ -1,6 +1,8 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, ChevronRight, Droplets, FlaskConical, ShieldCheck, Sprout, X } from 'lucide-react';
 import { DecisionScenario } from './evidenceMatrix';
+import { buildDryRunNutritionPlan } from './dryRunNutritionPlan';
+import { ManufacturerProfileSelection } from './manufacturerProfiles';
 import { PRODUCT_VERIFICATION } from './nutritionEvidencePolicy';
 import { buildWeeklyNutritionPlan, compareScenario, ProductDecision } from './nutritionTechnician';
 import { useAppStore } from './store';
@@ -28,6 +30,7 @@ export default function NutritionTechnicianPanel() {
   const [stage, setStage] = useState<GrowthStage>(GrowthStage.VEG);
   const [week, setWeek] = useState(1);
   const [waterType, setWaterType] = useState<WaterType>(store.currentWaterProfile);
+  const [manufacturerProfile, setManufacturerProfile] = useState<ManufacturerProfileSelection>('AUTO');
   const [backgroundEcInput, setBackgroundEcInput] = useState('');
   const [leafTempInput, setLeafTempInput] = useState('');
   const [rhInput, setRhInput] = useState('');
@@ -47,6 +50,7 @@ export default function NutritionTechnicianPanel() {
     waterType,
     backgroundEc,
     medium: 'TERRA_SOIL_PERLITE',
+    manufacturerProfile,
     environment: {
       leafTemperatureC,
       relativeHumidity: relativeHumidity !== undefined && relativeHumidity >= 0 && relativeHumidity <= 100 ? relativeHumidity : undefined,
@@ -54,9 +58,17 @@ export default function NutritionTechnicianPanel() {
       closedLoopActiveCoolingWithCo2: closedLoopCo2,
     },
     scheduleProfileResolved: false,
-  }), [stage, week, waterType, backgroundEc, leafTemperatureC, relativeHumidity, usesLed, closedLoopCo2]);
+  }), [stage, week, waterType, backgroundEc, manufacturerProfile, leafTemperatureC, relativeHumidity, usesLed, closedLoopCo2]);
 
   const plan = useMemo(() => buildWeeklyNutritionPlan(context), [context]);
+  const dryRun = useMemo(() => buildDryRunNutritionPlan({
+    stage,
+    week,
+    waterType,
+    backgroundEc,
+    usesLed,
+    manufacturerProfile,
+  }), [stage, week, waterType, backgroundEc, usesLed, manufacturerProfile]);
   const scenarioPack = useMemo(() => selectedProductId ? compareScenario(selectedProductId, context) : null, [selectedProductId, context]);
   const decision = scenarioPack
     ? scenario === 'BASELINE' ? scenarioPack.baseline : scenario === 'LESS' ? scenarioPack.less : scenario === 'MORE' ? scenarioPack.more : scenarioPack.omit
@@ -79,8 +91,8 @@ export default function NutritionTechnicianPanel() {
   return (
     <main className="mx-auto max-w-6xl px-5 py-6">
       <div className="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5">
-        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-300"><ShieldCheck className="h-4 w-4" /> Nutrition Technician v1 · Evidence Mode</div>
-        <p className="mt-2 max-w-4xl text-sm leading-relaxed text-white/55">Producent ustala punkt odniesienia. Nauka ustawia bariery. Pomiary i stan rośliny korygują decyzję. Brak danych nie jest zaproszeniem do kreatywnego liczenia.</p>
+        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-cyan-300"><ShieldCheck className="h-4 w-4" /> Nutrition Technician v1.2 · Provenance + Dry Run</div>
+        <p className="mt-2 max-w-4xl text-sm leading-relaxed text-white/55">Producent ustala punkt odniesienia. Nauka ustawia bariery. Pomiary i stan rośliny korygują decyzję. Profil LED i legacy są rozdzielone, a brak danych nadal nie jest zaproszeniem do kreatywnego liczenia.</p>
       </div>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -94,25 +106,33 @@ export default function NutritionTechnicianPanel() {
             {Array.from({ length: stageMaxWeek(stage) }, (_, index) => index + 1).map(value => <option key={value} value={value}>Tydzień {value}</option>)}
           </select>
         </Control>
-        <Control label="Profil wody" hint="Gdy nie wiemy, system pokazuje kandydatów HARD/SOFT zamiast zgadywać.">
+        <Control label="Profil producenta" hint="AUTO wybiera LED 2024 przy aktywnym LED. Legacy i LED nigdy nie są mieszane po cichu.">
+          <select className="w-full bg-black px-3 py-2 text-sm outline-none" value={manufacturerProfile} onChange={event => setManufacturerProfile(event.target.value as ManufacturerProfileSelection)}>
+            <option value="AUTO">AUTO</option><option value="TERRA_LED_2024">TERRA LED 2024</option><option value="TERRA_LEGACY_HARD_SOFT">LEGACY HARD/SOFT</option>
+          </select>
+        </Control>
+        <Control label="Profil wody" hint="To deklaracja użytkownika. Realny background EC ma większą wartość diagnostyczną.">
           <select className="w-full bg-black px-3 py-2 text-sm outline-none" value={waterType} onChange={event => setWaterType(event.target.value as WaterType)}>
             <option value={WaterType.CUSTOM}>Kranowa / nie wiem</option><option value={WaterType.HARD}>HARD</option><option value={WaterType.SOFT}>SOFT</option><option value={WaterType.RO}>RO</option>
           </select>
         </Control>
-        <Control label="Background EC · mS/cm" hint="Pusty = brak pomiaru. Dane wodociągu są tylko referencją.">
-          <input className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 font-mono text-sm outline-none focus:border-cyan-500/50" inputMode="decimal" type="number" min="0" max="20" step="0.01" placeholder="np. 0.53" value={backgroundEcInput} onChange={event => setBackgroundEcInput(event.target.value)} />
-        </Control>
       </section>
 
       <section className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Control label="Temperatura liścia · °C" hint="Służy tylko do rozpoznania sygnału profilu SHOGUN. Nie przelicza dawki.">
+        <Control label="Background EC · mS/cm" hint="Dla LED: EC 0 = +20% Terra, 0.2 = +10%, 0.4 baseline, 0.6+ = −10%. Pomiędzy punktami nie interpolujemy.">
+          <input className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 font-mono text-sm outline-none focus:border-cyan-500/50" inputMode="decimal" type="number" min="0" max="20" step="0.01" placeholder="np. 0.53" value={backgroundEcInput} onChange={event => setBackgroundEcInput(event.target.value)} />
+        </Control>
+        <Control label="Temperatura liścia · °C" hint="Służy do sygnału Light/Standard. To osobny wymiar od feedchartu LED.">
           <input className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 font-mono text-sm outline-none" inputMode="decimal" type="number" step="0.1" placeholder="np. 24.5" value={leafTempInput} onChange={event => setLeafTempInput(event.target.value)} />
         </Control>
-        <Control label="RH · %" hint="Razem z temperaturą liścia odróżnia sygnał Light/Standard.">
+        <Control label="RH · %" hint="Razem z temperaturą liścia pomaga rozpoznać kontekst kalkulatora producenta.">
           <input className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 font-mono text-sm outline-none" inputMode="numeric" type="number" min="0" max="100" step="1" placeholder="np. 60" value={rhInput} onChange={event => setRhInput(event.target.value)} />
         </Control>
-        <ToggleControl label="Oświetlenie LED" checked={usesLed} onChange={setUsesLed} hint="SHOGUN wymienia LED jako sygnał Heavy. To nadal nie wybiera automatycznie tabeli." />
-        <ToggleControl label="Closed-loop + cooling + CO₂" checked={closedLoopCo2} onChange={setClosedLoopCo2} hint="Drugi sygnał Heavy według producenta." />
+        <ToggleControl label="Oświetlenie LED" checked={usesLed} onChange={setUsesLed} hint="Przy AUTO wybiera wersjonowany TERRA LED 2024. Sygnał Heavy z kalkulatora pozostaje osobną informacją." />
+      </section>
+
+      <section className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <ToggleControl label="Closed-loop + cooling + CO₂" checked={closedLoopCo2} onChange={setClosedLoopCo2} hint="Sygnał Heavy wg producenta. Nie mnoży dawki automatycznie." />
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-12">
@@ -121,12 +141,13 @@ export default function NutritionTechnicianPanel() {
             <div className="space-y-3 text-sm">
               <InfoRow label="Medium" value="TERRA / SOIL + PERLIT" />
               <InfoRow label="Faza" value={`${stageLabel(stage)} · W${week}`} />
+              <InfoRow label="Profil" value={plan.manufacturerProfileLabel} />
               <InfoRow label="Woda" value={waterLabel(waterType)} />
               <InfoRow label="Status wody" value={plan.waterStatus} />
               <InfoRow label="EC z pomiaru" value={backgroundEc === undefined ? 'BRAK' : `${backgroundEc.toFixed(2)} mS/cm`} />
               <InfoRow label="SHOGUN wg EC" value={waterClassText} />
-              <InfoRow label="Sygnał schedule" value={plan.scheduleSignals.join(' + ')} />
-              <InfoRow label="Tabela profilu" value={plan.scheduleProfileResolved ? 'ZWERYFIKOWANA' : 'NIEPRZYPISANA'} />
+              <InfoRow label="LED water rule" value={plan.waterAdjustment ? `${plan.waterAdjustment.percent > 0 ? '+' : ''}${plan.waterAdjustment.percent}%` : 'N/D'} />
+              <InfoRow label="Sygnał L/S/H" value={plan.scheduleSignals.join(' + ')} />
             </div>
           </Card>
           {plan.waterNotes.length > 0 && <Notice title="Woda · kontekst" tone="blue" lines={plan.waterNotes} />}
@@ -134,6 +155,20 @@ export default function NutritionTechnicianPanel() {
         </div>
 
         <div className="space-y-4 lg:col-span-8">
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs font-black uppercase tracking-[0.18em] text-emerald-300">Dry Run Plan</div><div className="mt-1 text-lg font-black">{dryRun.profileLabel} · {stageLabel(stage)} W{week}</div></div><div className="flex gap-2"><Badge text={dryRun.readyForExecutionCandidate ? 'CANDIDATE READY' : 'CANDIDATE HOLD'} tone={dryRun.readyForExecutionCandidate ? 'green' : 'amber'} /><Badge text="AUTO EXECUTION OFF" tone="amber" /></div></div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {dryRun.doses.length ? dryRun.doses.map(dose => (
+                <div key={dose.productId} className="rounded-xl border border-white/10 bg-black/40 p-3">
+                  <div className="text-sm font-bold">{store.getProduct(dose.productId)?.name ?? dose.productId}</div>
+                  <div className="mt-1 font-mono text-sm text-emerald-200">{dose.resolvedMlPerL} ml/L</div>
+                  <div className="mt-1 text-[10px] text-white/35">baseline {dose.baselineMlPerL} · korekta {dose.adjustmentPercent > 0 ? '+' : ''}{dose.adjustmentPercent}% · {dose.status}</div>
+                </div>
+              )) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-sm text-white/35">Brak bezpośrednich punktów dla tego profilu/fazy.</div>}
+            </div>
+            {dryRun.conflicts.length > 0 && <div className="mt-4 space-y-2">{dryRun.conflicts.map(conflict => <div key={`${conflict.code}-${conflict.title}`} className={`rounded-lg border p-3 text-xs ${conflict.severity === 'BLOCK' ? 'border-red-500/25 bg-red-500/10 text-red-200' : conflict.severity === 'WARN' ? 'border-amber-500/20 bg-amber-500/5 text-amber-100' : 'border-white/10 bg-white/5 text-white/55'}`}><strong>{conflict.severity} · {conflict.title}</strong><div className="mt-1">{conflict.action}</div></div>)}</div>}
+          </div>
+
           {plan.applicationProtocols.length > 0 && (
             <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-5">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-fuchsia-300"><Sprout className="h-4 w-4" /> Protokół specjalny producenta</div>
@@ -151,7 +186,7 @@ export default function NutritionTechnicianPanel() {
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <div className="flex items-end justify-between gap-4"><div><div className="text-xs font-black uppercase tracking-[0.18em] text-white/45">Plan producenta + guardrails</div><div className="mt-1 text-xl font-black">{stageLabel(stage)} · tydzień {week}</div></div><div className="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] font-black text-white/45">{plan.products.length} aktywnych pozycji</div></div>
-            {!plan.products.length ? <div className="mt-6 rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Brak zweryfikowanych zwykłych pozycji dla tego tygodnia. Sprawdź protokoły specjalne. System nie uzupełnia dziur wyobraźnią.</div> : (
+            {!plan.products.length ? <div className="mt-6 rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Brak zweryfikowanych zwykłych pozycji dla tego tygodnia. System nie uzupełnia dziur wyobraźnią.</div> : (
               <div className="mt-5 space-y-3">{plan.products.map(product => <div key={product.productId}><ProductRow decision={product} name={store.getProduct(product.productId)?.name ?? product.productId} onOpen={() => { setSelectedProductId(product.productId); setScenario('BASELINE'); }} /></div>)}</div>
             )}
           </div>
