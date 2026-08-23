@@ -9,6 +9,7 @@ import {
   getProductEvidence,
   TERRA_EVIDENCE_MATRIX,
 } from './evidenceMatrix';
+import { classifyShogunWaterFromMeasuredEc } from './nutritionEvidencePolicy';
 
 export interface NutritionContext {
   stage: GrowthStage;
@@ -41,6 +42,7 @@ export interface WeeklyNutritionPlan {
   waterType: WaterType;
   backgroundEc?: number;
   waterStatus: 'MEASURED' | 'REFERENCE_ONLY' | 'UNKNOWN';
+  manufacturerWaterClass: WaterType | 'BOUNDARY' | null;
   waterNotes: string[];
   products: ProductDecision[];
   systemWarnings: string[];
@@ -68,8 +70,8 @@ function candidateDoseWindows(evidence: ProductEvidence, context: NutritionConte
     return getDoseWindow(evidence.productId, context.stage, context.week, context.waterType);
   }
 
-  // Unknown/RO water must not make the base disappear. Show all direct candidates
-  // for the stage/week and force the caller to resolve the water context explicitly.
+  // Unknown/RO water must not make the base disappear. Show direct candidates
+  // and force the caller to resolve the water context rather than silently mapping it.
   return evidence.manufacturerDoseWindows.filter(window =>
     (window.stage === context.stage || window.stage === GrowthStage.ALL)
     && context.week >= window.weekStart
@@ -91,11 +93,11 @@ export function evaluateProductDecision(
   const decisionText = [...scenarioText(evidence, scenario)];
 
   if (context.waterType === WaterType.CUSTOM) {
-    unresolved.push('Profil wody CUSTOM: pokazujemy kandydatów HARD/SOFT, ale wybór końcowej dawki zależnej od wody wymaga realnego background EC.');
+    unresolved.push('Profil wody CUSTOM: pokazujemy kandydatów HARD/SOFT, ale końcowa dawka zależna od wody wymaga rozstrzygnięcia profilu lub aktualnego wariantu Custom z kalkulatora producenta.');
   }
 
   if (context.waterType === WaterType.RO) {
-    unresolved.push('RO nie jest automatycznie mapowane na SOFT w Evidence Matrix v1. Kandydaci są informacyjni; użyj danych producenta z kalkulatora lub realnego background EC.');
+    unresolved.push('RO nie jest automatycznie mapowane na SOFT w Evidence Matrix v1. Kandydaci są informacyjni; użyj aktualnego wariantu RO producenta lub jawnego Custom EC.');
   }
 
   if (scenario === 'MORE') {
@@ -129,11 +131,19 @@ export function evaluateProductDecision(
 export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutritionPlan {
   const systemWarnings: string[] = [];
   const waterNotes: string[] = [];
+  const manufacturerWaterClass = classifyShogunWaterFromMeasuredEc(context.backgroundEc);
 
   let waterStatus: WeeklyNutritionPlan['waterStatus'] = 'UNKNOWN';
   if (typeof context.backgroundEc === 'number') {
     waterStatus = 'MEASURED';
     waterNotes.push(`Użyto zmierzonego background EC: ${context.backgroundEc.toFixed(2)} mS/cm.`);
+    if (manufacturerWaterClass === WaterType.HARD) {
+      waterNotes.push('Według aktualnej definicji SHOGUN background EC >0.4 mS/cm leży po stronie HARD. To sugestia klasyfikacji, nie cicha zmiana ustawienia.');
+    } else if (manufacturerWaterClass === WaterType.SOFT) {
+      waterNotes.push('Według aktualnej definicji SHOGUN background EC <0.4 mS/cm leży po stronie SOFT. To sugestia klasyfikacji, nie cicha zmiana ustawienia.');
+    } else if (manufacturerWaterClass === 'BOUNDARY') {
+      waterNotes.push('Background EC = 0.40 mS/cm leży dokładnie na granicy opisanej przez SHOGUN. Pozostawiamy profil nierozstrzygnięty.');
+    }
   } else if (context.waterType === WaterType.CUSTOM) {
     waterStatus = 'REFERENCE_ONLY';
     waterNotes.push(
@@ -142,8 +152,16 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     waterNotes.push('Zmierz EC swojej kranówki przed wyborem wariantu zależnego od wody.');
   }
 
+  if (
+    (context.waterType === WaterType.HARD || context.waterType === WaterType.SOFT)
+    && (manufacturerWaterClass === WaterType.HARD || manufacturerWaterClass === WaterType.SOFT)
+    && context.waterType !== manufacturerWaterClass
+  ) {
+    systemWarnings.push(`Wybrano ${context.waterType}, ale zmierzony background EC według progu SHOGUN wskazuje ${manufacturerWaterClass}. Sprawdź profil wody przed użyciem dawki.`);
+  }
+
   if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) {
-    systemWarnings.push('Nie wybieramy automatycznie tabeli HARD/SOFT bez danych producenta lub jawnie rozstrzygniętego profilu wody.');
+    systemWarnings.push('Nie wybieramy automatycznie tabeli HARD/SOFT. Background EC może dać sugestię klasyfikacji, ale aktualny wariant Custom/RO producenta pozostaje osobnym źródłem dawki.');
   }
 
   if (context.medium !== 'TERRA_SOIL_PERLITE') {
@@ -155,15 +173,14 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     .filter((decision): decision is ProductDecision => Boolean(decision))
     .filter(decision => decision.doseWindows.length > 0);
 
-  const hasSilicon = products.some(product => product.productId === 'silicon');
-  if (hasSilicon) {
+  if (products.some(product => product.productId === 'silicon')) {
     systemWarnings.push('Sekwencja wykonania musi zawierać PRE_BASE_PH_GATE po Siliconie oraz finalny pH check po całej mieszance.');
   }
 
   const hasPk = products.some(product => product.productId === 'pk-warrior');
   const hasBloomBase = products.some(product => product.productId === 'samurai-terra-bloom');
   if (hasPk && hasBloomBase) {
-    systemWarnings.push('PK Warrior + Bloom base: producent zaleca redukcję Bloom base o 25–50%. Nie sumuj pełnych dawek bez korekty.');
+    systemWarnings.push('PK Warrior + Bloom base: nie wykonuj automatycznie dodatkowego −25–50%. Najpierw ustal, czy dawka Bloom pochodzi z kompletnego feedchartu, czy ze standalone rate; inaczej grozi podwójna korekta.');
   }
 
   return {
@@ -172,6 +189,7 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     waterType: context.waterType,
     backgroundEc: context.backgroundEc,
     waterStatus,
+    manufacturerWaterClass,
     waterNotes,
     products,
     systemWarnings,
