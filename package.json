@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "smoke:backend": "node --experimental-strip-types scripts/backend-smoke.mjs",
-    "smoke:nutrition": "tsx scripts/nutrition-smoke.ts"
+    "smoke:nutrition": "tsx scripts/nutrition-smoke.ts",
+    "smoke:nutrition-integrity": "tsx scripts/nutrition-integrity-smoke.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
