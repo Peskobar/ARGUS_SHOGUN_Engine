@@ -18,6 +18,17 @@ import {
   getManufacturerScheduleSignals,
 } from './nutritionEvidencePolicy';
 import { SHOGUN_START_EVIDENCE, getSupplementalEvidenceRef } from './supplementalEvidence';
+import {
+  ManufacturerProfile,
+  ManufacturerProfileSelection,
+  WaterAdjustmentResolution,
+  getProfileDosePoint,
+  isTerraBaseProduct,
+  ledCalMagDoseMlPerL,
+  resolveLedTerraWaterAdjustment,
+  resolveManufacturerProfile,
+} from './manufacturerProfiles';
+import { ConflictFinding, resolveNutritionConflicts } from './nutritionConflictResolver';
 
 export interface NutritionContext {
   stage: GrowthStage;
@@ -28,7 +39,8 @@ export interface NutritionContext {
   medium: string;
   allowBaseOmit?: boolean;
   environment?: FeedingEnvironment;
-  /** Stays false until exact current SHOGUN Light/Standard/Heavy chart provenance is versioned. */
+  manufacturerProfile?: ManufacturerProfileSelection;
+  /** Light/Standard/Heavy calculator provenance remains a separate gate from the LED feedchart. */
   scheduleProfileResolved?: boolean;
 }
 
@@ -54,11 +66,16 @@ export interface WeeklyNutritionPlan {
   backgroundEc?: number;
   waterStatus: 'MEASURED' | 'REFERENCE_ONLY' | 'UNKNOWN';
   manufacturerWaterClass: WaterType | 'BOUNDARY' | null;
+  manufacturerProfileId: ManufacturerProfile['id'];
+  manufacturerProfileLabel: string;
+  manufacturerProfileResolved: boolean;
+  waterAdjustment: WaterAdjustmentResolution | null;
   scheduleSignals: FeedingScheduleProfile[];
   scheduleProfileResolved: boolean;
   applicationProtocols: ApplicationProtocolEvidence[];
   waterNotes: string[];
   products: ProductDecision[];
+  conflicts: ConflictFinding[];
   systemWarnings: string[];
 }
 
@@ -68,14 +85,82 @@ function resolveProductEvidence(productId: string) {
   return getProductEvidence(productId) ?? (productId === SHOGUN_START_EVIDENCE.productId ? SHOGUN_START_EVIDENCE : undefined);
 }
 
-function refsFor(evidence: ProductEvidence) {
-  return evidence.refs
-    .map(id => getEvidenceRef(id) ?? getSupplementalEvidenceRef(id))
-    .filter((ref): ref is EvidenceRef => Boolean(ref));
+function activeProfile(context: NutritionContext) {
+  return resolveManufacturerProfile(context.manufacturerProfile ?? 'AUTO', context.environment?.usesLed);
 }
 
-function confidenceFor(evidence: ProductEvidence, context: NutritionContext): ProductDecision['confidence'] {
+function manufacturerProfileRef(profile: ManufacturerProfile): EvidenceRef | null {
+  if (profile.id !== 'TERRA_LED_2024') return null;
+  return {
+    id: 'shogun-led-terra-2024',
+    sourceType: 'MANUFACTURER',
+    title: 'SHOGUN LED Coco and Terra Feedchart — current downloads set',
+    url: 'https://www.shogunfertilisers.com/pages/downloads',
+    year: 2024,
+    applicability: 'DIRECT',
+    confidence: 'HIGH',
+  };
+}
+
+function refsFor(evidence: ProductEvidence, profile: ManufacturerProfile, hasProfileDose: boolean) {
+  const refs = evidence.refs
+    .map(id => getEvidenceRef(id) ?? getSupplementalEvidenceRef(id))
+    .filter((ref): ref is EvidenceRef => Boolean(ref));
+  const profileRef = hasProfileDose ? manufacturerProfileRef(profile) : null;
+  if (profileRef && !refs.some(ref => ref.id === profileRef.id)) refs.unshift(profileRef);
+  return refs;
+}
+
+function profileDoseWindow(evidence: ProductEvidence, context: NutritionContext, profile: ManufacturerProfile) {
+  if (profile.id !== 'TERRA_LED_2024') return null;
+
+  // Seedling Katana remains a special SOAK/WEEKLY protocol, not generic every-feed dosing.
+  if (evidence.productId === 'katana-roots' && context.stage === GrowthStage.SEEDLING) return [];
+
+  if (evidence.productId === 'calmag') {
+    const calMag = ledCalMagDoseMlPerL(context.backgroundEc, context.waterType);
+    if (calMag.dose === null) return [];
+    return [{
+      stage: context.stage,
+      weekStart: context.week,
+      weekEnd: context.week,
+      minMlPerL: calMag.dose,
+      maxMlPerL: calMag.dose,
+      method: 'ROOT_FEED' as const,
+      note: calMag.rationale,
+    }];
+  }
+
+  const point = getProfileDosePoint(profile, evidence.productId, context.stage, context.week);
+  if (!point) return [];
+
+  let dose = point.mlPerL;
+  let note = point.note;
+  if (isTerraBaseProduct(point.productId)) {
+    const adjustment = resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType);
+    dose = Number((dose * adjustment.multiplier).toFixed(3));
+    note = `${note ? `${note} ` : ''}${adjustment.rationale}`;
+  }
+
+  return [{
+    stage: point.stage,
+    weekStart: point.weekStart,
+    weekEnd: point.weekEnd,
+    minMlPerL: dose,
+    maxMlPerL: dose,
+    method: point.method,
+    note,
+  }];
+}
+
+function confidenceFor(evidence: ProductEvidence, context: NutritionContext, profile: ManufacturerProfile): ProductDecision['confidence'] {
   if (evidence.status !== 'VERIFIED') return 'LOW';
+  if (profile.id === 'TERRA_LED_2024') {
+    const adjustment = resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType);
+    if (isTerraBaseProduct(evidence.productId) && adjustment.status === 'UNRESOLVED_BETWEEN_ANCHORS') return 'MEDIUM';
+    if (adjustment.status === 'ASSUMED_FROM_WATER_CLASS') return 'MEDIUM';
+    return 'HIGH';
+  }
   if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) return 'MEDIUM';
   if (context.scheduleProfileResolved !== true) return 'MEDIUM';
   return 'HIGH';
@@ -88,9 +173,10 @@ function scenarioText(evidence: ProductEvidence, scenario: DecisionScenario) {
   return evidence.why;
 }
 
-function candidateDoseWindows(evidence: ProductEvidence, context: NutritionContext) {
-  // Katana 5 ml/L for seedlings is a specific 15-minute soak + weekly protocol,
-  // not an every-feed root-dose window. It is surfaced via applicationProtocols.
+function candidateDoseWindows(evidence: ProductEvidence, context: NutritionContext, profile: ManufacturerProfile) {
+  const profileWindows = profileDoseWindow(evidence, context, profile);
+  if (profileWindows !== null) return profileWindows;
+
   if (evidence.productId === 'katana-roots' && context.stage === GrowthStage.SEEDLING) return [];
 
   const directFilter = (window: ProductEvidence['manufacturerDoseWindows'][number]) =>
@@ -98,7 +184,6 @@ function candidateDoseWindows(evidence: ProductEvidence, context: NutritionConte
     && context.week >= window.weekStart
     && context.week <= window.weekEnd;
 
-  // Supplemental evidence is not stored in evidenceMatrix.getDoseWindow.
   if (evidence.productId === SHOGUN_START_EVIDENCE.productId) {
     return evidence.manufacturerDoseWindows.filter(directFilter);
   }
@@ -107,8 +192,6 @@ function candidateDoseWindows(evidence: ProductEvidence, context: NutritionConte
     return getDoseWindow(evidence.productId, context.stage, context.week, context.waterType);
   }
 
-  // Unknown/RO water must not make the base disappear. Show direct candidates
-  // and force the caller to resolve the water context rather than silently mapping it.
   return evidence.manufacturerDoseWindows.filter(directFilter);
 }
 
@@ -120,26 +203,32 @@ export function evaluateProductDecision(
   const evidence = resolveProductEvidence(productId);
   if (!evidence) return null;
 
-  const doseWindows = candidateDoseWindows(evidence, context);
+  const profile = activeProfile(context);
+  const doseWindows = candidateDoseWindows(evidence, context, profile);
   const unresolved = [...(evidence.unresolved ?? [])];
   const hardRules = [...(evidence.hardRules ?? [])];
   const decisionText = [...scenarioText(evidence, scenario)];
 
-  if (context.waterType === WaterType.CUSTOM) {
-    unresolved.push('Profil wody CUSTOM: pokazujemy kandydatów HARD/SOFT, ale końcowa dawka zależna od wody wymaga rozstrzygnięcia profilu lub aktualnego wariantu Custom z kalkulatora producenta.');
+  if (profile.id === 'TERRA_LED_2024') {
+    const adjustment = resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType);
+    if (isTerraBaseProduct(productId) && adjustment.status === 'UNRESOLVED_BETWEEN_ANCHORS') unresolved.push(adjustment.rationale);
+    if (productId === 'calmag') {
+      const calMag = ledCalMagDoseMlPerL(context.backgroundEc, context.waterType);
+      decisionText.push(calMag.rationale);
+    }
+  } else {
+    if (context.waterType === WaterType.CUSTOM) {
+      unresolved.push('Profil wody CUSTOM: pokazujemy kandydatów HARD/SOFT, ale końcowa dawka zależna od wody wymaga rozstrzygnięcia profilu lub aktualnego wariantu Custom z kalkulatora producenta.');
+    }
+    if (context.waterType === WaterType.RO) {
+      unresolved.push('RO nie jest automatycznie mapowane na SOFT w legacy Evidence Matrix. Użyj aktualnego wariantu producenta lub jawnego Custom EC.');
+    }
+    if (context.scheduleProfileResolved !== true && doseWindows.length > 0) {
+      unresolved.push('Legacy dawka ma źródło producenta, ale profil Light/Standard/Heavy kalkulatora pozostaje osobnym, nierozstrzygniętym provenance.');
+    }
   }
 
-  if (context.waterType === WaterType.RO) {
-    unresolved.push('RO nie jest automatycznie mapowane na SOFT w Evidence Matrix v1. Kandydaci są informacyjni; użyj aktualnego wariantu RO producenta lub jawnego Custom EC.');
-  }
-
-  if (context.scheduleProfileResolved !== true && doseWindows.length > 0) {
-    unresolved.push('Dawka ma źródło producenta, ale nie ma jeszcze przypiętej wersji profilu SHOGUN Light/Standard/Heavy. Do czasu audytu profilu decyzja liczbowa nie otrzymuje HIGH confidence.');
-  }
-
-  if (scenario === 'MORE') {
-    decisionText.push('Scenariusz MORE jest symulacją ryzyka, nie automatyczną rekomendacją zwiększenia dawki.');
-  }
+  if (scenario === 'MORE') decisionText.push('Scenariusz MORE jest symulacją ryzyka, nie automatyczną rekomendacją zwiększenia dawki.');
 
   if (scenario === 'OMIT' && evidence.role === 'BASE') {
     hardRules.push('Ominięcie nawozu bazowego wymaga jawnego potwierdzenia i alternatywnego pełnego źródła żywienia.');
@@ -159,8 +248,8 @@ export function evaluateProductDecision(
     interactions: evidence.interactions,
     hardRules,
     unresolved,
-    refs: refsFor(evidence),
-    confidence: confidenceFor(evidence, context),
+    refs: refsFor(evidence, profile, doseWindows.length > 0),
+    confidence: confidenceFor(evidence, context, profile),
     blocked,
   };
 }
@@ -168,7 +257,12 @@ export function evaluateProductDecision(
 export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutritionPlan {
   const systemWarnings: string[] = [];
   const waterNotes: string[] = [];
+  const profile = activeProfile(context);
+  const manufacturerProfileResolved = profile.id === 'TERRA_LED_2024' || profile.id === 'TERRA_LEGACY_HARD_SOFT';
   const manufacturerWaterClass = classifyShogunWaterFromMeasuredEc(context.backgroundEc);
+  const waterAdjustment = profile.id === 'TERRA_LED_2024'
+    ? resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType)
+    : null;
   const scheduleSignals = getManufacturerScheduleSignals(context.environment ?? {});
   const scheduleProfileResolved = context.scheduleProfileResolved === true;
   const applicationProtocols = APPLICATION_PROTOCOLS.filter(protocol => protocol.stage === context.stage);
@@ -177,17 +271,14 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   if (typeof context.backgroundEc === 'number') {
     waterStatus = 'MEASURED';
     waterNotes.push(`Użyto zmierzonego background EC: ${context.backgroundEc.toFixed(2)} mS/cm.`);
-    if (manufacturerWaterClass === WaterType.HARD) {
-      waterNotes.push('Według aktualnej definicji SHOGUN background EC >0.4 mS/cm leży po stronie HARD. To sugestia klasyfikacji, nie cicha zmiana ustawienia.');
-    } else if (manufacturerWaterClass === WaterType.SOFT) {
-      waterNotes.push('Według aktualnej definicji SHOGUN background EC <0.4 mS/cm leży po stronie SOFT. To sugestia klasyfikacji, nie cicha zmiana ustawienia.');
-    } else if (manufacturerWaterClass === 'BOUNDARY') {
-      waterNotes.push('Background EC = 0.40 mS/cm leży dokładnie na granicy opisanej przez SHOGUN. Pozostawiamy profil nierozstrzygnięty.');
-    }
+    if (profile.id === 'TERRA_LED_2024' && waterAdjustment) waterNotes.push(waterAdjustment.rationale);
+    if (manufacturerWaterClass === WaterType.HARD) waterNotes.push('Klasyfikator kalkulatora SHOGUN wskazuje HARD dla EC >0.4; to osobna informacja od dyskretnych korekt profilu LED.');
+    else if (manufacturerWaterClass === WaterType.SOFT) waterNotes.push('Klasyfikator kalkulatora SHOGUN wskazuje SOFT dla EC <0.4; profil LED ma własne punkty EC 0 / 0.2 / 0.4 / 0.6+.');
+    else if (manufacturerWaterClass === 'BOUNDARY') waterNotes.push('Background EC = 0.40 mS/cm jest dokładnie baseline profilu LED 2024.');
   } else if (context.waterType === WaterType.CUSTOM) {
     waterStatus = 'REFERENCE_ONLY';
     waterNotes.push(`Lokalna analiza Emmerich: ok. ${EMmerichWaterReference.backgroundEcMsCmApprox.toFixed(2)} mS/cm, ${EMmerichWaterReference.hardnessDh} °dH, Ca ${EMmerichWaterReference.calciumMgL} mg/L, Mg ${EMmerichWaterReference.magnesiumMgL} mg/L. To tylko referencja sieciowa.`);
-    waterNotes.push('Zmierz EC swojej kranówki przed wyborem wariantu zależnego od wody.');
+    waterNotes.push('Zmierz EC swojej kranówki przed automatycznym water adjustment i decyzją o CalMag.');
   }
 
   if (
@@ -195,44 +286,39 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     && (manufacturerWaterClass === WaterType.HARD || manufacturerWaterClass === WaterType.SOFT)
     && context.waterType !== manufacturerWaterClass
   ) {
-    systemWarnings.push(`Wybrano ${context.waterType}, ale zmierzony background EC według progu SHOGUN wskazuje ${manufacturerWaterClass}. Sprawdź profil wody przed użyciem dawki.`);
+    systemWarnings.push(`Wybrano ${context.waterType}, ale zmierzony background EC według progu kalkulatora SHOGUN wskazuje ${manufacturerWaterClass}. Sprawdź profil wody.`);
   }
 
-  if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) {
-    systemWarnings.push('Nie wybieramy automatycznie tabeli HARD/SOFT. Background EC może dać sugestię klasyfikacji, ale aktualny wariant Custom/RO producenta pozostaje osobnym źródłem dawki.');
+  if (profile.id === 'TERRA_LED_2024') {
+    systemWarnings.push('Aktywny, wersjonowany profil SHOGUN Terra LED 2024. Nie mieszamy jego liczb z legacy HARD/SOFT.');
+    if (waterAdjustment?.status === 'UNRESOLVED_BETWEEN_ANCHORS') {
+      systemWarnings.push('LED water adjustment: EC leży pomiędzy punktami opisanymi przez producenta. Nie interpolujemy procentu; pokazujemy baseline i oznaczamy niepewność.');
+    }
+  } else if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) {
+    systemWarnings.push('Legacy profile: nie wybieramy automatycznie tabeli HARD/SOFT dla CUSTOM/RO.');
   }
 
   if (!scheduleProfileResolved) {
-    systemWarnings.push(`Sygnał profilu producenta: ${scheduleSignals.join(' + ')}. Nie zmieniamy dawki, ponieważ profile Light/Standard/Heavy nie są jeszcze przypięte do zweryfikowanych tabel w bazie.`);
+    systemWarnings.push(`Sygnał kalkulatora Light/Standard/Heavy: ${scheduleSignals.join(' + ')}. To osobny wymiar od wersjonowanego feedchartu LED i nie przelicza dawki automatycznie.`);
   }
-
-  if (scheduleSignals.length > 1) {
-    systemWarnings.push('Warunki dają więcej niż jeden sygnał profilu SHOGUN. To konflikt kontekstu, nie powód do automatycznego wyboru mocniejszej tabeli.');
-  }
-
-  if (context.medium !== 'TERRA_SOIL_PERLITE') {
-    systemWarnings.push('Evidence Matrix v1 jest zatwierdzona wyłącznie dla kontekstu TERRA/SOIL + perlit.');
-  }
+  if (scheduleSignals.length > 1) systemWarnings.push('Warunki dają więcej niż jeden sygnał Light/Standard/Heavy. To konflikt kontekstu, nie powód do wyboru mocniejszej dawki.');
+  if (context.medium !== 'TERRA_SOIL_PERLITE') systemWarnings.push('Evidence Matrix v1 jest zatwierdzona wyłącznie dla kontekstu TERRA/SOIL + perlit.');
 
   const products = ALL_PRODUCT_EVIDENCE
     .map(entry => evaluateProductDecision(entry.productId, context, 'BASELINE'))
     .filter((decision): decision is ProductDecision => Boolean(decision))
     .filter(decision => decision.doseWindows.length > 0);
 
-  if (products.some(product => product.productId === 'silicon')) {
-    systemWarnings.push('Sekwencja wykonania musi zawierać PRE_BASE_PH_GATE po Siliconie oraz finalny pH check po całej mieszance.');
-  }
-
-  const hasPk = products.some(product => product.productId === 'pk-warrior');
-  const hasBloomBase = products.some(product => product.productId === 'samurai-terra-bloom');
-  if (hasPk && hasBloomBase) {
-    systemWarnings.push('PK Warrior + Bloom base: nie wykonuj automatycznie dodatkowego −25–50%. Najpierw ustal, czy dawka Bloom pochodzi z kompletnego feedchartu, czy ze standalone rate; inaczej grozi podwójna korekta.');
-  }
-
-  const hasStart = products.some(product => product.productId === 'shogun-start');
-  const hasGrow = products.some(product => product.productId === 'samurai-terra-grow');
-  if (hasStart && hasGrow) {
-    systemWarnings.push('SHOGUN Start i Terra Grow mają nakładające się źródła dla wczesnej wegetacji. Nie sumuj ich automatycznie. Current Start page mówi 4 ml/L przez pierwsze 2 tygodnie early veg, podczas gdy statyczny feedchart inaczej rozdziela etap propagacji. Wymagany wynik aktualnego kalkulatora.');
+  const conflictResolution = resolveNutritionConflicts({
+    profile,
+    stage: context.stage,
+    week: context.week,
+    productIds: products.map(product => product.productId),
+    waterType: context.waterType,
+    backgroundEc: context.backgroundEc,
+  });
+  for (const finding of conflictResolution.findings) {
+    if (finding.severity !== 'INFO') systemWarnings.push(`${finding.title}: ${finding.action}`);
   }
 
   return {
@@ -242,11 +328,16 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     backgroundEc: context.backgroundEc,
     waterStatus,
     manufacturerWaterClass,
+    manufacturerProfileId: profile.id,
+    manufacturerProfileLabel: profile.label,
+    manufacturerProfileResolved,
+    waterAdjustment,
     scheduleSignals,
     scheduleProfileResolved,
     applicationProtocols,
     waterNotes,
     products,
+    conflicts: conflictResolution.findings,
     systemWarnings,
   };
 }
