@@ -181,10 +181,20 @@ export function resolveLedTerraWaterAdjustment(backgroundEc?: number, waterType?
     };
   }
 
-  if (waterType === WaterType.RO) return { percent: 20, multiplier: 1.2, status: 'ASSUMED_FROM_WATER_CLASS', rationale: 'RO selected without EC measurement: LED-chart EC 0 rule used as an explicit assumption.', sourceId };
-  if (waterType === WaterType.SOFT) return { percent: 10, multiplier: 1.1, status: 'ASSUMED_FROM_WATER_CLASS', rationale: 'SOFT selected without EC measurement: LED-chart EC 0.2 rule used as an explicit assumption.', sourceId };
-  if (waterType === WaterType.HARD) return { percent: -10, multiplier: 0.9, status: 'ASSUMED_FROM_WATER_CLASS', rationale: 'HARD selected without EC measurement: LED-chart EC 0.6+ rule used as an explicit assumption.', sourceId };
-  return { percent: 0, multiplier: 1, status: 'UNRESOLVED_BETWEEN_ANCHORS', rationale: 'Water context unresolved: baseline LED dose shown without automatic percentage adjustment.', sourceId };
+  const declaration = waterType === WaterType.RO
+    ? 'RO'
+    : waterType === WaterType.SOFT
+      ? 'SOFT'
+      : waterType === WaterType.HARD
+        ? 'HARD'
+        : 'unknown';
+  return {
+    percent: 0,
+    multiplier: 1,
+    status: 'UNRESOLVED_BETWEEN_ANCHORS',
+    rationale: `Water declared as ${declaration}, but no background EC was measured. LED percentage modifiers are tied to explicit EC anchors, so ARGUS does not infer a numeric adjustment from the label alone.`,
+    sourceId,
+  };
 }
 
 export function ledCalMagDoseMlPerL(backgroundEc?: number, waterType?: WaterType): { dose: number | null; rationale: string } {
@@ -192,7 +202,7 @@ export function ledCalMagDoseMlPerL(backgroundEc?: number, waterType?: WaterType
     if (backgroundEc <= 0.23) return { dose: 1, rationale: 'LED chart recommends CalMag 1 ml/L for pure/distilled/RO and soft water.' };
     return { dose: null, rationale: 'LED chart does not schedule default CalMag at the EC 0.4 baseline or harder water; do not add it automatically.' };
   }
-  if (waterType === WaterType.RO || waterType === WaterType.SOFT) return { dose: 1, rationale: 'RO/SOFT selected: LED chart recommends CalMag 1 ml/L root treatment.' };
+  if (waterType === WaterType.RO || waterType === WaterType.SOFT) return { dose: 1, rationale: 'RO/SOFT selected: LED chart recommends CalMag 1 ml/L root treatment; measure background EC before applying any Terra percentage modifier.' };
   if (waterType === WaterType.HARD) return { dose: null, rationale: 'HARD selected: LED chart does not give a default CalMag row.' };
   return { dose: null, rationale: 'Unknown water: CalMag remains conditional until EC/water profile is known.' };
 }
