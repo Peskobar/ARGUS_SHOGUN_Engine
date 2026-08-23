@@ -3,6 +3,7 @@ import { GrowthStage, WaterType } from './types';
 export type ManufacturerProfileId = 'TERRA_LEGACY_HARD_SOFT' | 'TERRA_LED_2024';
 export type ManufacturerProfileSelection = 'AUTO' | ManufacturerProfileId;
 export type WaterAdjustmentStatus = 'EXACT_RULE' | 'ASSUMED_FROM_WATER_CLASS' | 'BASELINE' | 'UNRESOLVED_BETWEEN_ANCHORS';
+export type ManufacturerAuditStatus = 'CONFIRMED' | 'PARTIAL' | 'OBSOLETE';
 
 export interface ManufacturerSourceRecord {
   id: string;
@@ -13,6 +14,7 @@ export interface ManufacturerSourceRecord {
   documentDate?: string;
   retrievedDate: string;
   status: 'CURRENT' | 'LEGACY' | 'MIRROR_OF_CURRENT';
+  auditStatus: ManufacturerAuditStatus;
   notes: string[];
 }
 
@@ -35,6 +37,9 @@ export interface ManufacturerProfile {
   baselineWaterEc?: number;
   recommendedPh?: [number, number];
   dosePoints: ManufacturerDosePoint[];
+  auditStatus: ManufacturerAuditStatus;
+  snapshotFrozen: boolean;
+  releaseEligible: boolean;
   notes: string[];
 }
 
@@ -54,24 +59,26 @@ export const MANUFACTURER_SOURCE_REGISTRY: ManufacturerSourceRecord[] = [
     sourceUrl: 'https://www.shogunfertilisers.com/pages/downloads',
     retrievedDate: '2026-08-23',
     status: 'CURRENT',
+    auditStatus: 'CONFIRMED',
     notes: [
-      'Official current downloads page explicitly lists LED Coco and Terra Feedchart.',
-      'This page proves the LED chart remains part of the current manufacturer documentation set.',
+      'Official current downloads page lists LED Coco and Terra feedchart.',
+      'It confirms existence/current listing, not a frozen version/date of every table row.',
     ],
   },
   {
     id: 'shogun-led-terra-2024',
-    title: 'SHOGUN LED Coco and Terra Feedchart — WEB',
+    title: 'SHOGUN LED Coco and Terra Feedchart — implementation snapshot candidate',
     publisher: 'SHOGUN Fertilisers',
     sourceUrl: 'https://www.shogunfertilisers.com/pages/downloads',
     mirrorUrl: 'https://ghedirect.co.uk/download/88/shogun/1639855/shogun-led-coco-and-terra-feedchart-web.pdf',
     documentDate: '2024-04-05',
     retrievedDate: '2026-08-23',
     status: 'MIRROR_OF_CURRENT',
+    auditStatus: 'PARTIAL',
     notes: [
-      'Official SHOGUN downloads page lists the chart; the mirror exposes the indexed PDF text and date.',
-      'All chart amounts are expressed as mL/10 L and are normalised here to mL/L.',
-      'Chart baseline is moderately hard water EC 0.4 mS/cm.',
+      'Independent Work audit confirms the LED profile exists on current Downloads but does not accept the mirror date as an official SHOGUN version stamp.',
+      'The internal id TERRA_LED_2024 is retained for compatibility; 2024 must not be presented as a verified official publication version.',
+      'All imported chart points remain preview data until a full reproducible manufacturer snapshot is frozen and reconciled.',
     ],
   },
   {
@@ -81,7 +88,11 @@ export const MANUFACTURER_SOURCE_REGISTRY: ManufacturerSourceRecord[] = [
     sourceUrl: 'https://www.shogunfertilisers.com/media/yhqdxajh/shogun_-_terra_feedchart_new.pdf',
     retrievedDate: '2026-08-23',
     status: 'LEGACY',
-    notes: ['Retained as a separate legacy profile. Never merge its values silently with TERRA_LED_2024.'],
+    auditStatus: 'OBSOLETE',
+    notes: [
+      'Independent Work audit classifies this static hard/soft chart as archived/obsolete for current-plan authority.',
+      'Retain only for provenance/history. Never mix its numbers with current generator/LED profile.',
+    ],
   },
   {
     id: 'shogun-pk-current',
@@ -90,7 +101,11 @@ export const MANUFACTURER_SOURCE_REGISTRY: ManufacturerSourceRecord[] = [
     sourceUrl: 'https://www.shogunfertilisers.com/products/pk-warrior-9-18',
     retrievedDate: '2026-08-23',
     status: 'CURRENT',
-    notes: ['Standalone product instructions say to reduce bloom nutrients 25–50%; integrated-feedchart provenance must be handled separately.'],
+    auditStatus: 'PARTIAL',
+    notes: [
+      'Standalone instructions say to reduce Bloom nutrients 25–50%.',
+      'Independent audit found a conflicting generic 4 ml/L field versus detailed 0.5 ml/L / first-week 1 ml/L instructions. Structured method/stage/source provenance is mandatory.',
+    ],
   },
 ];
 
@@ -107,14 +122,17 @@ const led = (productId: string, stage: GrowthStage, weekStart: number, weekEnd: 
 
 export const TERRA_LED_2024_PROFILE: ManufacturerProfile = {
   id: 'TERRA_LED_2024',
-  label: 'SHOGUN Terra · LED 2024',
+  label: 'SHOGUN Terra · LED current · PARTIAL snapshot',
   medium: 'TERRA_SOIL_PERLITE',
   sourceIds: ['shogun-downloads-current', 'shogun-led-terra-2024'],
   baselineWaterEc: 0.4,
   recommendedPh: [5.5, 6.5],
+  auditStatus: 'PARTIAL',
+  snapshotFrozen: false,
+  releaseEligible: false,
   dosePoints: [
-    led('shogun-start', GrowthStage.SEEDLING, 1, 2, 4, 'Chart placement: cuttings/seedlings only.'),
-    led('katana-roots', GrowthStage.SEEDLING, 1, 2, 5, 'Do not reinterpret as every-feed: current product protocol includes soak/cadence semantics.'),
+    led('shogun-start', GrowthStage.SEEDLING, 1, 2, 4, 'Preview snapshot: cuttings/seedlings placement.'),
+    led('katana-roots', GrowthStage.SEEDLING, 1, 2, 5, 'Method branch is mandatory; do not reinterpret as routine root feed.'),
     led('katana-roots', GrowthStage.VEG, 1, 4, 0.2),
     led('katana-roots', GrowthStage.BLOOM, 1, 3, 0.2),
     led('samurai-terra-grow', GrowthStage.VEG, 1, 2, 1.5),
@@ -131,22 +149,28 @@ export const TERRA_LED_2024_PROFILE: ManufacturerProfile = {
     led('silicon', GrowthStage.BLOOM, 1, 7, 1.0),
   ],
   notes: [
-    'Do not merge with legacy HARD/SOFT values. This is an independent manufacturer profile.',
-    'Chart: baseline water EC 0.4 mS/cm; RO EC 0 uses +20% Terra nutrients, soft EC 0.2 uses +10%, hard EC 0.6+ uses −10%.',
-    'The water percentage adjustment applies to Terra base nutrients, not blindly to every additive.',
-    'CalMag is not a default row at baseline water: chart recommends 1 ml/L root treatment when using pure/distilled/RO and soft water.',
-    'Terra application frequency depends on nutrient charge in the soil: manufacturer notes every watering or every 2–3 waterings may be appropriate.',
-    'Premix Silicon in 5 L water and adjust to about pH 6.5 before adding to the nutrient tank. Final recommended pH is 5.5–6.5.',
+    'Work audit verdict: WEEKLY PLAN remains HOLD until the complete current LED/generator profile is frozen with full tuple, timestamp and reproducible source snapshot.',
+    'Do not merge with legacy HARD/SOFT values.',
+    'Water anchors are preview semantics only: EC 0 / 0.2 / 0.4 / 0.6+. No interpolation between anchors.',
+    'A water-class label alone never creates a numeric modifier.',
+    'CalMag is conditional and must not be auto-added from EC alone; Ca/Mg/alkalinity/base/substrate context is required.',
+    'Silicon process keeps PRE_BASE_PH_GATE separate from FINAL_PH_ADJUSTMENT.',
   ],
 };
 
 export const TERRA_LEGACY_PROFILE: ManufacturerProfile = {
   id: 'TERRA_LEGACY_HARD_SOFT',
-  label: 'SHOGUN Terra · Legacy HARD/SOFT',
+  label: 'SHOGUN Terra · Legacy HARD/SOFT · OBSOLETE for auto plan',
   medium: 'TERRA_SOIL_PERLITE',
   sourceIds: ['shogun-terra-legacy'],
   dosePoints: [],
-  notes: ['Dose windows remain owned by evidenceMatrix.ts. This profile exists so provenance is explicit and never confused with LED 2024.'],
+  auditStatus: 'OBSOLETE',
+  snapshotFrozen: true,
+  releaseEligible: false,
+  notes: [
+    'Dose windows remain in evidenceMatrix.ts for historical comparison only.',
+    'Independent audit says this source is not on current Downloads and must not drive a current adaptive weekly plan.',
+  ],
 };
 
 export function getManufacturerProfile(id: ManufacturerProfileId) {
@@ -159,6 +183,10 @@ export function resolveManufacturerProfile(selection: ManufacturerProfileSelecti
   return usesLed === true ? TERRA_LED_2024_PROFILE : TERRA_LEGACY_PROFILE;
 }
 
+export function profileCanDriveWeeklyPlan(profile: ManufacturerProfile) {
+  return profile.auditStatus === 'CONFIRMED' && profile.snapshotFrozen && profile.releaseEligible;
+}
+
 export function getProfileDosePoint(profile: ManufacturerProfile, productId: string, stage: GrowthStage, week: number) {
   return profile.dosePoints.find(point => point.productId === productId && point.stage === stage && week >= point.weekStart && week <= point.weekEnd);
 }
@@ -168,15 +196,15 @@ export function resolveLedTerraWaterAdjustment(backgroundEc?: number, waterType?
   const close = (value: number, anchor: number) => Math.abs(value - anchor) <= 0.03;
 
   if (backgroundEc !== undefined && Number.isFinite(backgroundEc) && backgroundEc >= 0) {
-    if (close(backgroundEc, 0)) return { percent: 20, multiplier: 1.2, status: 'EXACT_RULE', rationale: 'LED chart: pure/distilled/RO water EC 0 → +20% Terra nutrients.', sourceId };
-    if (close(backgroundEc, 0.2)) return { percent: 10, multiplier: 1.1, status: 'EXACT_RULE', rationale: 'LED chart: soft water EC 0.2 → +10% Terra nutrients.', sourceId };
-    if (close(backgroundEc, 0.4)) return { percent: 0, multiplier: 1, status: 'BASELINE', rationale: 'LED chart baseline: moderately hard water EC 0.4.', sourceId };
-    if (backgroundEc >= 0.6) return { percent: -10, multiplier: 0.9, status: 'EXACT_RULE', rationale: 'LED chart: hard water EC 0.6+ → −10% Coco/Terra nutrients.', sourceId };
+    if (close(backgroundEc, 0)) return { percent: 20, multiplier: 1.2, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC ~0 → +20% Terra base.', sourceId };
+    if (close(backgroundEc, 0.2)) return { percent: 10, multiplier: 1.1, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC ~0.2 → +10% Terra base.', sourceId };
+    if (close(backgroundEc, 0.4)) return { percent: 0, multiplier: 1, status: 'BASELINE', rationale: 'Preview LED source anchor: source EC ~0.4 baseline.', sourceId };
+    if (backgroundEc >= 0.6) return { percent: -10, multiplier: 0.9, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC 0.6+ → −10% Terra base.', sourceId };
     return {
       percent: 0,
       multiplier: 1,
       status: 'UNRESOLVED_BETWEEN_ANCHORS',
-      rationale: `Measured EC ${backgroundEc.toFixed(2)} lies between explicit LED-chart anchors. No interpolation is performed; baseline dose remains visible pending calculator/user decision.`,
+      rationale: `Measured source EC ${backgroundEc.toFixed(2)} lies between explicit preview anchors. No interpolation is performed.`,
       sourceId,
     };
   }
@@ -192,19 +220,18 @@ export function resolveLedTerraWaterAdjustment(backgroundEc?: number, waterType?
     percent: 0,
     multiplier: 1,
     status: 'UNRESOLVED_BETWEEN_ANCHORS',
-    rationale: `Water declared as ${declaration}, but no background EC was measured. LED percentage modifiers are tied to explicit EC anchors, so ARGUS does not infer a numeric adjustment from the label alone.`,
+    rationale: `Water declared as ${declaration}, but source EC is not a live measurement. No numeric water adjustment is inferred from the label.`,
     sourceId,
   };
 }
 
 export function ledCalMagDoseMlPerL(backgroundEc?: number, waterType?: WaterType): { dose: number | null; rationale: string } {
-  if (backgroundEc !== undefined && Number.isFinite(backgroundEc) && backgroundEc >= 0) {
-    if (backgroundEc <= 0.23) return { dose: 1, rationale: 'LED chart recommends CalMag 1 ml/L for pure/distilled/RO and soft water.' };
-    return { dose: null, rationale: 'LED chart does not schedule default CalMag at the EC 0.4 baseline or harder water; do not add it automatically.' };
-  }
-  if (waterType === WaterType.RO || waterType === WaterType.SOFT) return { dose: 1, rationale: 'RO/SOFT selected: LED chart recommends CalMag 1 ml/L root treatment; measure background EC before applying any Terra percentage modifier.' };
-  if (waterType === WaterType.HARD) return { dose: null, rationale: 'HARD selected: LED chart does not give a default CalMag row.' };
-  return { dose: null, rationale: 'Unknown water: CalMag remains conditional until EC/water profile is known.' };
+  const ecText = backgroundEc !== undefined && Number.isFinite(backgroundEc) ? `source EC ${backgroundEc.toFixed(2)}` : 'source EC unknown';
+  const label = waterType ?? WaterType.CUSTOM;
+  return {
+    dose: null,
+    rationale: `CalMag remains NEEDS_USER_DATA (${ecText}, declared ${label}). Independent audit blocks automatic CalMag selection from EC/water label alone; require Ca, Mg, alkalinity/base and substrate context.`,
+  };
 }
 
 export function isTerraBaseProduct(productId: string) {
