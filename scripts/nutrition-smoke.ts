@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { GrowthStage, WaterType } from '../src/types';
 import { buildWeeklyNutritionPlan, compareScenario, evaluateProductDecision } from '../src/nutritionTechnician';
+import {
+  APPLICATION_PROTOCOLS,
+  PRODUCT_VERIFICATION,
+  classifyShogunWaterFromMeasuredEc,
+  getManufacturerScheduleSignals,
+  pkBaseAdjustmentPolicy,
+} from '../src/nutritionEvidencePolicy';
 
 const hardVeg1 = buildWeeklyNutritionPlan({
   stage: GrowthStage.VEG,
@@ -20,10 +27,7 @@ assert.ok(!hardVegIds.includes('pk-warrior'));
 assert.ok(!hardVegIds.includes('samurai-terra-bloom'));
 
 const hardGrow = hardVeg1.products.find(product => product.productId === 'samurai-terra-grow')!;
-assert.deepEqual(
-  hardGrow.doseWindows.map(window => [window.minMlPerL, window.maxMlPerL]),
-  [[1, 2]],
-);
+assert.deepEqual(hardGrow.doseWindows.map(window => [window.minMlPerL, window.maxMlPerL]), [[1, 2]]);
 assert.equal(hardGrow.confidence, 'HIGH');
 
 const customVeg1 = buildWeeklyNutritionPlan({
@@ -89,5 +93,16 @@ const omitBaseOverride = evaluateProductDecision('samurai-terra-grow', {
   allowBaseOmit: true,
 }, 'OMIT');
 assert.equal(omitBaseOverride?.blocked, false);
+
+assert.equal(classifyShogunWaterFromMeasuredEc(0.53), WaterType.HARD);
+assert.equal(classifyShogunWaterFromMeasuredEc(0.2), WaterType.SOFT);
+assert.equal(classifyShogunWaterFromMeasuredEc(0.4), 'BOUNDARY');
+assert.deepEqual(getManufacturerScheduleSignals({ leafTemperatureC: 27, relativeHumidity: 45 }), ['LIGHT']);
+assert.deepEqual(getManufacturerScheduleSignals({ leafTemperatureC: 24, relativeHumidity: 60 }), ['STANDARD']);
+assert.deepEqual(getManufacturerScheduleSignals({ usesLed: true }), ['HEAVY']);
+assert.equal(PRODUCT_VERIFICATION['samurai-terra-grow'].compositionStatus, 'PARTIAL');
+assert.ok(APPLICATION_PROTOCOLS.some(protocol => protocol.productId === 'katana-roots' && protocol.method === 'SOAK' && protocol.durationMinutes === 15));
+assert.equal(pkBaseAdjustmentPolicy('INTEGRATED_FEEDCHART').requiresExplicitAdjustment, false);
+assert.equal(pkBaseAdjustmentPolicy('STANDALONE_PRODUCT_RATE').requiresExplicitAdjustment, true);
 
 console.log('nutrition smoke: PASS');
