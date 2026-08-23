@@ -1,20 +1,67 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ARGUS SHOGUN Engine
 
-# Run and deploy your AI Studio app
+Operator-facing planner for preparing SHOGUN nutrient recipes with explicit execution order, finite syringe/pipette allocation and Reality Lock validation.
 
-This contains everything you need to run your app locally.
+## Status
 
-View your app in AI Studio: https://ai.studio/apps/704afcb1-6c02-41ca-bf45-56a06f2c4963
+This repository separates **execution logic** from **recipe evidence**.
 
-## Run Locally
+- The execution engine is responsible for ordering steps, validating context, checking physical tools and preventing impossible operations.
+- Factory recipe doses are currently marked `UNVERIFIED` and must not be treated as evidence-verified merely because the application can calculate them.
+- A recipe marked `CONFLICT` is blocked from execution until its source conflict is resolved.
 
-**Prerequisites:**  Node.js
+## Reality Lock rules
 
+For root-feed recipes the engine models process checkpoints, not only a flat ingredient list:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. start from measured base water,
+2. add Silicon according to the recipe,
+3. mix and perform the post-Silicon pH checkpoint,
+4. continue with the remaining products in the engine/recipe order,
+5. measure final EC,
+6. perform the final pH check.
+
+Concentrated products are represented as additions to water, not as concentrates to be premixed together.
+
+A custom recipe can override product order with `mixOrder`. The post-Silicon pH checkpoint is inserted relative to the actual sorted execution sequence, so it cannot accidentally move in front of Silicon.
+
+## Architecture
+
+- `src/recipeEngine.ts` — strict recipe filtering, execution order/protocol, validation and inventory-shortage checks.
+- `src/syringeEngine.ts` — finite physical syringe/pipette allocation. One physical tool instance cannot be assigned to multiple products in one prepared set.
+- `src/store.ts` — local persisted state and atomic execution of inventory + history changes.
+- `src/data.ts` — product catalog and factory recipes. Factory doses remain `UNVERIFIED` until the evidence audit is complete.
+- `src/App.tsx` — UI wired to the domain engines. It does not maintain a competing copy of execution rules.
+- `scripts/backend-smoke.mjs` — regression tests for filtering, ordering, pH checkpoint placement, finite tools, validation and stock shortages.
+
+## Local development
+
+Requires Node.js 22 or newer.
+
+```sh
+npm install
+npm run dev
+```
+
+Run the complete local check:
+
+```sh
+npm run check
+```
+
+That runs TypeScript checking, backend smoke tests and the production build.
+
+## Safety properties
+
+The UI blocks execution when:
+
+- recipe validation reports an error,
+- the recipe has `CONFLICT` status,
+- available inventory is lower than the calculated requirement,
+- the physical syringe/pipette set cannot cover all required doses without reusing an assigned tool.
+
+`UNVERIFIED` is surfaced as a warning rather than silently presented as verified data.
+
+## Data policy
+
+Do not silently change factory doses to make tests pass. Dose values, application claims and source metadata should be changed only through an evidence-first audit with traceable sources.
