@@ -5,114 +5,125 @@ Repository: `Peskobar/ARGUS_SHOGUN_Engine`
 Base: `ui/recipe-engine-integration-v1`  
 Head: `nutrition/evidence-matrix-v1`
 
-## Why this exists
+## Current external-audit state
 
-The Codex Security plugin is best run in a Codex host that exposes the scan runtime. This conversation does not expose the required `start_codex_security_*` / scan-finalization tools, so **no claim is made that an official Codex Security scan has run here**.
+Independent Work red-team audit dated 23.08.2026 has been reconciled into the branch.
 
-This document is a ready-to-use handoff for the diff scan, plus a manual preflight of security and domain-integrity boundaries.
+Audit verdict now encoded in source:
 
-## Exact diff scope
+- WHY / LESS / MORE / OMIT: `GO_WITH_CONDITIONS`
+- weekly plan: `HOLD`
+- automatic dose selection: `HOLD`
+- automatic execution: `NO_GO`
 
-Review every changed source/config file in PR #5, including at minimum:
+This document is a handoff only. No claim is made that an official Codex Security scan has run in this chat host.
+
+## Required diff scope
+
+Review all PR #5 changed files, especially:
 
 - `.github/workflows/ci.yml`
 - `package.json`
 - `scripts/nutrition-smoke.ts`
+- `scripts/nutrition-integrity-smoke.ts`
+- `scripts/work-audit-smoke.ts`
 - `src/App.tsx`
 - `src/NutritionTechnicianPanel.tsx`
 - `src/dryRunNutritionPlan.ts`
 - `src/evidenceMatrix.ts`
+- `src/localWaterReference.ts`
 - `src/manufacturerProfiles.ts`
+- `src/manufacturerSnapshot.ts`
+- `src/mediumState.ts`
+- `src/nutritionAuditLock.ts`
 - `src/nutritionConflictResolver.ts`
+- `src/nutritionDecisionKernel.ts`
 - `src/nutritionEvidencePolicy.ts`
 - `src/nutritionExecutionBridge.ts`
+- `src/nutritionObservationHistory.ts`
+- `src/nutritionSymptomEngine.ts`
 - `src/nutritionTechnician.ts`
+- `src/observedNutritionState.ts`
 - `src/store.ts`
 - `src/supplementalEvidence.ts`
+- `src/waterChemistry.ts`
 
-Documentation should also be checked for secrets, misleading release claims and unsafe operational claims.
+## Security/domain-integrity assets
 
-## Threat model
+- manufacturer profile/source identity and frozen-snapshot authority;
+- dose method/stage/cadence provenance;
+- evidence status/confidence privilege boundary;
+- ABSTAIN and release-gate integrity;
+- safe physical mixing order and Silicon pH gates;
+- water/EC measurement semantics;
+- local inventory/history and user observations;
+- distinction between preview, proposal, applied event and confirmed outcome;
+- SDS hazard locks and human handling requirements.
 
-### Assets
+## Properties that must hold
 
-- integrity of manufacturer dose/profile data;
-- integrity of provenance, evidence status and confidence metadata;
-- execution ordering and hard agronomic rules;
-- local inventory/history state;
-- user-entered EC and future pH/recipe data;
-- release-gate state between Nutrition Technician and Planner 2.2;
-- any future import/export payloads.
+1. User/persisted/imported data cannot promote itself to manufacturer/VERIFIED authority.
+2. A partial/unfrozen manufacturer profile cannot become weekly-plan release authority.
+3. Legacy HARD/SOFT cannot silently merge with the current LED profile.
+4. HARD/SOFT/RO label alone cannot create a numeric water modifier.
+5. CalMag cannot be auto-added from EC or a visual symptom alone.
+6. Generic manufacturer `dose` fields cannot override METHOD+STAGE+CADENCE+SOURCE-specific instructions.
+7. Start+Grow conflict cannot disappear in object transformations.
+8. PK/Bloom cannot receive an accidental second 25–50% reduction.
+9. NaN/Infinity/extreme malformed values fail closed.
+10. Generic `rootZoneEc` without measurement method cannot become decision-grade data.
+11. A single symptom/photo cannot create a nutrient diagnosis or dose change.
+12. Release-gate PASS state cannot be forged from localStorage/import payloads.
+13. `automaticPlannerDispatchAllowed` stays false.
+14. Work audit `automaticExecution=NO_GO` cannot be bypassed by setting all software gates PASS.
+15. UI sorting/filtering cannot replace physical `mixOrder` / process gates.
+16. User observations/history remain private/local unless explicitly exported/synced.
+17. No secrets/API keys are bundled into the client.
 
-### Trust boundaries
+## Manual preflight observations
 
-1. Hard-coded manufacturer evidence vs user-created/custom recipes.
-2. UI input vs decision engine.
-3. Evidence/source URLs vs application code.
-4. localStorage persisted state vs factory defaults/schema migrations.
-5. Nutrition advisory/dry-run state vs Planner physical execution state.
-6. External audit result vs repository evidence/provenance.
-7. GitHub Actions dependencies vs repository code.
+This is not an official Codex finding set.
 
-### Security / integrity properties that must hold
+Positive controls currently present:
 
-- User/persisted data can never silently promote evidence or recipes to `VERIFIED`/manufacturer authority.
-- `allowBaseOmit` requires exact `=== true`; no implicit truthy coercion.
-- Unknown/invalid numeric input must not produce NaN/Infinity actionable doses or bypass guards.
-- A declared HARD/SOFT water label must not silently trigger a numeric LED water modifier when measured EC is absent.
-- LED and legacy manufacturer profiles must not be silently merged.
-- An unresolved conflict must not disappear merely because a dry-run object is transformed into an execution handoff.
-- `automaticPlannerDispatchAllowed` remains false in v1 even if all review gates are marked PASS.
-- A UI sort/filter operation must not alter the physical safe mix order.
-- Source URLs are data, never executable content.
-- User-provided names/notes remain React-escaped; no raw HTML rendering.
-- Future imported JSON is schema-validated before entering recipe/evidence state.
-- localStorage corruption fails closed rather than converting malformed values into actionable doses.
-- No client bundle contains API keys or private `.env` values.
-- CI dependency installation does not execute arbitrary package install scripts.
+- `manufacturerSnapshot.ts` has no release snapshot; current value is deliberately null.
+- LED profile is `PARTIAL`, `snapshotFrozen=false`, `releaseEligible=false`.
+- Legacy profile is `OBSOLETE` for current auto-plan authority.
+- `DryRunNutritionPlan.readyForExecutionCandidate` is hard false after the independent audit.
+- Nutrition execution bridge always carries automatic execution `NO_GO` and Planner auto-dispatch false.
+- explicit ABSTAIN reasons exist.
+- measurement ontology separates source/input/runoff/pour-through/pore-water/substrate EC.
+- measurement-quality and runoff-fraction metadata are modelled.
+- symptom engine is hypothesis-only and cannot change dose.
+- lifecycle transition helper prevents arbitrary READY→CONFIRMED jumps.
+- change-control max delta and observation window remain undefined rather than being invented.
+- SDS hazard locks mark PK Warrior H314, Silicon skin/eye irritation and CalMag serious-eye-damage handling as human/SDS-review paths.
+- CI uses `npm install --ignore-scripts` and runs backend, nutrition, integrity and Work-audit smoke suites.
 
-## Manual preflight after provenance/bridge pass
+## Items Codex Security should attack
 
-This section is **not** an official Codex Security scan.
-
-### Positive observations
-
-- Manufacturer profiles and source registry are static source-controlled data.
-- The LED water resolver now applies numeric percentage modifiers only from measured finite EC at explicit manufacturer anchors/ranges. Water labels alone do not change Terra base dose.
-- Between-anchor EC values are not interpolated.
-- Water percentage modifiers apply only to Terra base products, not blindly to every additive.
-- `DryRunNutritionPlan` does not mutate inventory/history or invoke Planner execution.
-- `NutritionExecutionHandoff` is a boundary object only. It cannot dispatch to Planner and hardcodes `automaticPlannerDispatchAllowed: false`.
-- Pending agronomic/security/source-reconciliation gates all create HOLD blockers.
-- Grow + Bloom is an explicit BLOCK conflict.
-- BASE omission is fail-closed unless `allowBaseOmit === true`.
-- Evidence URLs are constants rendered through normal React anchors; no `dangerouslySetInnerHTML` is used by the new UI.
-- UI EC is bounded to 0–20 mS/cm before entering the Nutrition context.
-- `store.ts` v3 validates persisted enums/numbers, restores only mutable stock values for factory products, sanitizes custom recipes/history, and forces persisted custom recipes to `UNVERIFIED`.
-- CI uses `npm install --ignore-scripts --no-audit --no-fund` during verification.
-- No new runtime remote API call was introduced by Nutrition Technician.
-
-### Items Codex Security should challenge
-
-1. **Runtime API boundaries**: core TypeScript functions can be imported outside the controlled UI. Verify impossible stage/week/extreme numeric calls remain fail-closed and cannot later become an unsafe execution path.
-2. **Evidence-state privilege**: ensure no future builder/import route can create source-controlled/manufacturer authority through public interfaces.
-3. **External link scheme**: current source URLs are constants. If editable/imported evidence is ever supported, enforce `https:` before rendering.
-4. **Audit gate authenticity**: future code must not accept arbitrary localStorage/imported strings as proof that agronomic/security reconciliation passed.
-5. **History semantics**: advisory, simulated, approved and physically executed doses must be distinguishable once the bridge writes history.
-6. **Execution ordering**: when handoff wiring is implemented, verify no UI/product sort can replace `mixOrder`/role ordering.
-7. **CI supply chain**: evaluate pinning GitHub Actions to immutable SHAs instead of floating major tags.
-8. **Privacy**: measurements and environment history should remain local unless the user explicitly exports/syncs them; do not commit personal observations to the public repository.
+1. Can custom/persisted data forge `snapshotFrozen`, `releaseEligible`, source authority or audit gate PASS?
+2. Can a caller bypass UI bounds by importing core functions with pathological finite numbers?
+3. Can a malformed object erase an ABSTAIN reason or conflict during Nutrition→Planner transformation?
+4. Can product ids or method fields be confused to turn Katana soak 5 ml/L into routine root feed?
+5. Can generic source metadata inject a `javascript:`/unsafe URL if evidence becomes user-editable later?
+6. Can lifecycle/history state be replayed or reordered to make a PROPOSED event look CONFIRMED?
+7. Can localStorage corruption poison currentWaterProfile, custom recipes, history, audit state or source identity?
+8. Can execution ordering be changed by UI sorting or arbitrary `mixOrder` mutation?
+9. Can future automation bypass SDS/human-handling interlocks?
+10. Evaluate GitHub Action tag pinning and dependency supply-chain exposure.
 
 ## Codex Security prompt
 
-> Run a security diff scan for PR #5 in `Peskobar/ARGUS_SHOGUN_Engine`, base `ui/recipe-engine-integration-v1`, head `nutrition/evidence-matrix-v1`. Treat agronomic data integrity as a security property. A malicious or malformed persisted/imported value must not promote unverified evidence, select manufacturer authority, bypass BASE omission, erase a nutrition conflict, alter safe mixing order, trigger an LED water modifier without valid measured EC, forge release-gate PASS state, inject executable content through evidence metadata, or cause unsafe numeric decisions through NaN/Infinity/extreme values. Review every changed file and follow changed behavior into `recipeEngine.ts`, `syringeEngine.ts` and `PlannerV2.tsx` only where needed. Distinguish conventional application-security findings from domain-integrity findings. Do not claim agronomic correctness; that is covered by the independent agronomic audit.
+> Run a security diff scan for PR #5 in `Peskobar/ARGUS_SHOGUN_Engine`, base `ui/recipe-engine-integration-v1`, head `nutrition/evidence-matrix-v1`. Treat agronomic data integrity and release-gate integrity as security properties. The independent red-team verdict is WHY/LESS/MORE/OMIT GO WITH CONDITIONS, WEEKLY PLAN HOLD, automatic dose HOLD, automatic execution NO-GO. Attempt to bypass those locks through malformed/localStorage/imported state, profile privilege forgery, numeric edge cases, method/stage confusion, conflict erasure, lifecycle replay and Nutrition→Planner transformations. Explicitly test manufacturer snapshot authority, Katana method separation, PK/Bloom provenance, Silicon pH process ordering, CalMag abstention, EC measurement-method semantics and SDS/human-handling interlocks. Distinguish conventional application-security findings from domain-integrity findings. Do not claim agronomic correctness.
 
 ## Exit criteria
 
 - zero unresolved HIGH/CRITICAL security findings;
-- all changed source files covered;
-- explicit verdict on malformed localStorage/import paths;
-- explicit verdict on evidence/profile privilege boundaries;
-- explicit verdict on numeric-input fail-closed behavior;
-- explicit verdict on release-gate authenticity;
-- explicit coverage statement for execution-order integrity.
+- every changed source/config file covered or explicitly excluded with reason;
+- explicit verdict on localStorage/import privilege boundaries;
+- explicit verdict on frozen manufacturer-snapshot authority;
+- explicit verdict on ABSTAIN/release-gate bypass resistance;
+- explicit verdict on numeric fail-closed behavior;
+- explicit verdict on lifecycle/history integrity;
+- explicit coverage statement for physical execution-order and SDS interlocks.
