@@ -49,7 +49,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
     initialCapacity: 250,
     remainingCapacity: 250,
     unit: 'ml',
-    foliarAllowed: true, // Manufacturer says can be used as foliar for stressed plants
+    foliarAllowed: true,
     compatibleMedia: [Medium.TERRA, Medium.COCO, Medium.HYDRO],
     type: 'ADDITIVE'
   },
@@ -88,7 +88,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
     initialCapacity: 1000,
     remainingCapacity: 1000,
     unit: 'ml',
-    foliarAllowed: true, // Has foliar recipe
+    foliarAllowed: true,
     compatibleMedia: [Medium.TERRA, Medium.COCO, Medium.HYDRO],
     type: 'ADDITIVE'
   },
@@ -101,7 +101,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
     initialCapacity: 1000,
     remainingCapacity: 1000,
     unit: 'ml',
-    foliarAllowed: true, // Has specific foliar application
+    foliarAllowed: true,
     compatibleMedia: [Medium.TERRA, Medium.COCO, Medium.HYDRO],
     type: 'ADDITIVE'
   },
@@ -146,6 +146,12 @@ export const SHOGUN_PRODUCTS: Product[] = [
   }
 ];
 
+/**
+ * Factory doses remain UNVERIFIED until the evidence-first dose audit is done.
+ * Ingredient array order mirrors the default physical execution order for
+ * readability only. The engine still derives execution from mixingRole, or
+ * explicit mixOrder in a custom recipe.
+ */
 export const FACTORY_RECIPES: Recipe[] = [
   {
     id: 'rec-terra-veg-early',
@@ -158,10 +164,10 @@ export const FACTORY_RECIPES: Recipe[] = [
     source: 'SHOGUN Feedchart',
     sourceDate: '2025-01-01',
     ingredients: [
-      { productId: 'samurai-terra-grow', concentration: 2.0 },
-      { productId: 'katana-roots', concentration: 0.2 },
       { productId: 'silicon', concentration: 1.0 },
       { productId: 'calmag', concentration: 0.5 },
+      { productId: 'samurai-terra-grow', concentration: 2.0 },
+      { productId: 'katana-roots', concentration: 0.2 },
     ]
   },
   {
@@ -175,10 +181,10 @@ export const FACTORY_RECIPES: Recipe[] = [
     source: 'SHOGUN Feedchart',
     sourceDate: '2025-01-01',
     ingredients: [
-      { productId: 'samurai-terra-bloom', concentration: 3.0 },
-      { productId: 'zenzym', concentration: 2.5 },
       { productId: 'silicon', concentration: 1.0 },
       { productId: 'calmag', concentration: 0.5 },
+      { productId: 'samurai-terra-bloom', concentration: 3.0 },
+      { productId: 'zenzym', concentration: 2.5 },
       { productId: 'sumo-active-boost', concentration: 1.5 },
     ]
   },
@@ -193,10 +199,10 @@ export const FACTORY_RECIPES: Recipe[] = [
     source: 'SHOGUN Feedchart',
     sourceDate: '2025-01-01',
     ingredients: [
-      { productId: 'samurai-terra-bloom', concentration: 3.0 },
-      { productId: 'zenzym', concentration: 2.5 },
       { productId: 'silicon', concentration: 1.0 },
       { productId: 'calmag', concentration: 0.5 },
+      { productId: 'samurai-terra-bloom', concentration: 3.0 },
+      { productId: 'zenzym', concentration: 2.5 },
       { productId: 'sumo-active-boost', concentration: 1.5 },
       { productId: 'pk-warrior', concentration: 0.5 },
     ]
