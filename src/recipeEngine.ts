@@ -66,7 +66,6 @@ export interface InventoryShortage {
  */
 const ROLE_ORDER: Record<string, number> = {
   SILICON: 100,
-  // 200 is reserved for the post-Silicon mix + pH checkpoint.
   CALMAG: 300,
   BASE: 400,
   ROOTS: 500,
@@ -150,18 +149,24 @@ export function buildExecutionProtocol(
     },
   ];
 
-  const hasSilicon = productSteps.some(step => String(step.product.mixingRole) === 'SILICON');
+  const siliconSteps = productSteps.filter(
+    step => String(step.product.mixingRole) === 'SILICON',
+  );
+  const lastSiliconStep = siliconSteps[siliconSteps.length - 1];
 
   for (const step of productSteps) {
     protocol.push({ kind: 'PRODUCT', ...step });
 
-    if (hasSilicon && String(step.product.mixingRole) === 'SILICON') {
+    // Insert relative to the actual sorted product sequence. Do not re-sort the
+    // complete protocol afterwards: an explicit custom mixOrder must never be
+    // able to drag the checkpoint in front of Silicon.
+    if (lastSiliconStep && step === lastSiliconStep) {
       protocol.push({
         kind: 'ACTION',
         id: 'post-silicon-ph',
-        order: 200,
+        order: step.order + 0.001,
         title: 'Wymieszaj i skontroluj pH po Silicon',
-        detail: 'To osobny checkpoint przed CalMag i nawozem bazowym. Korektę wykonuj według aktualnej instrukcji producenta/receptury.',
+        detail: 'To osobny checkpoint przed kolejnymi koncentratami. Korektę wykonuj według aktualnej instrukcji producenta/receptury.',
       });
     }
   }
@@ -183,7 +188,7 @@ export function buildExecutionProtocol(
     },
   );
 
-  return protocol.sort((a, b) => a.order - b.order);
+  return protocol;
 }
 
 export function validateRecipeContext(
