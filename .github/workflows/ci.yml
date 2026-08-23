@@ -2,9 +2,9 @@ name: ARGUS SHOGUN CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'ui/**']
   push:
-    branches: [main, 'ui/**', 'backend/**']
+    branches: [main, 'ui/**', 'backend/**', 'nutrition/**']
 
 permissions:
   contents: read
@@ -32,6 +32,9 @@ jobs:
 
       - name: Backend smoke
         run: npm run smoke:backend
+
+      - name: Nutrition smoke
+        run: npm run smoke:nutrition
 
       - name: Build
         run: npm run build
