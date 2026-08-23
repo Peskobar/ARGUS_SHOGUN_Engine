@@ -9,7 +9,14 @@ import {
   getProductEvidence,
   TERRA_EVIDENCE_MATRIX,
 } from './evidenceMatrix';
-import { classifyShogunWaterFromMeasuredEc } from './nutritionEvidencePolicy';
+import {
+  APPLICATION_PROTOCOLS,
+  ApplicationProtocolEvidence,
+  FeedingEnvironment,
+  FeedingScheduleProfile,
+  classifyShogunWaterFromMeasuredEc,
+  getManufacturerScheduleSignals,
+} from './nutritionEvidencePolicy';
 
 export interface NutritionContext {
   stage: GrowthStage;
@@ -19,6 +26,12 @@ export interface NutritionContext {
   measuredPh?: number;
   medium: string;
   allowBaseOmit?: boolean;
+  environment?: FeedingEnvironment;
+  /**
+   * Stays false until the exact current SHOGUN Light/Standard/Heavy chart
+   * used by a dose window has been captured and versioned.
+   */
+  scheduleProfileResolved?: boolean;
 }
 
 export interface ProductDecision {
@@ -43,6 +56,9 @@ export interface WeeklyNutritionPlan {
   backgroundEc?: number;
   waterStatus: 'MEASURED' | 'REFERENCE_ONLY' | 'UNKNOWN';
   manufacturerWaterClass: WaterType | 'BOUNDARY' | null;
+  scheduleSignals: FeedingScheduleProfile[];
+  scheduleProfileResolved: boolean;
+  applicationProtocols: ApplicationProtocolEvidence[];
   waterNotes: string[];
   products: ProductDecision[];
   systemWarnings: string[];
@@ -55,6 +71,10 @@ function refsFor(evidence: ProductEvidence) {
 function confidenceFor(evidence: ProductEvidence, context: NutritionContext): ProductDecision['confidence'] {
   if (evidence.status !== 'VERIFIED') return 'LOW';
   if (context.waterType === WaterType.CUSTOM || context.waterType === WaterType.RO) return 'MEDIUM';
+  // Manufacturer dose windows are source-backed, but until the current
+  // Light/Standard/Heavy schedule provenance is attached to each window,
+  // the final choice of a numeric dose is intentionally not HIGH confidence.
+  if (context.scheduleProfileResolved !== true) return 'MEDIUM';
   return 'HIGH';
 }
 
@@ -66,6 +86,10 @@ function scenarioText(evidence: ProductEvidence, scenario: DecisionScenario) {
 }
 
 function candidateDoseWindows(evidence: ProductEvidence, context: NutritionContext) {
+  // Katana 5 ml/L for seedlings is a specific 15-minute soak + weekly protocol,
+  // not an every-feed root-dose window. It is surfaced via applicationProtocols.
+  if (evidence.productId === 'katana-roots' && context.stage === GrowthStage.SEEDLING) return [];
+
   if (context.waterType !== WaterType.CUSTOM && context.waterType !== WaterType.RO) {
     return getDoseWindow(evidence.productId, context.stage, context.week, context.waterType);
   }
@@ -100,6 +124,10 @@ export function evaluateProductDecision(
     unresolved.push('RO nie jest automatycznie mapowane na SOFT w Evidence Matrix v1. Kandydaci są informacyjni; użyj aktualnego wariantu RO producenta lub jawnego Custom EC.');
   }
 
+  if (context.scheduleProfileResolved !== true && doseWindows.length > 0) {
+    unresolved.push('Dawka ma zweryfikowane źródło, ale nie ma jeszcze przypiętej wersji profilu SHOGUN Light/Standard/Heavy. Do czasu audytu profilu decyzja liczbowa pozostaje MEDIUM confidence.');
+  }
+
   if (scenario === 'MORE') {
     decisionText.push('Scenariusz MORE jest symulacją ryzyka, nie automatyczną rekomendacją zwiększenia dawki.');
   }
@@ -132,6 +160,9 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   const systemWarnings: string[] = [];
   const waterNotes: string[] = [];
   const manufacturerWaterClass = classifyShogunWaterFromMeasuredEc(context.backgroundEc);
+  const scheduleSignals = getManufacturerScheduleSignals(context.environment ?? {});
+  const scheduleProfileResolved = context.scheduleProfileResolved === true;
+  const applicationProtocols = APPLICATION_PROTOCOLS.filter(protocol => protocol.stage === context.stage);
 
   let waterStatus: WeeklyNutritionPlan['waterStatus'] = 'UNKNOWN';
   if (typeof context.backgroundEc === 'number') {
@@ -164,6 +195,14 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     systemWarnings.push('Nie wybieramy automatycznie tabeli HARD/SOFT. Background EC może dać sugestię klasyfikacji, ale aktualny wariant Custom/RO producenta pozostaje osobnym źródłem dawki.');
   }
 
+  if (!scheduleProfileResolved) {
+    systemWarnings.push(`Sygnał profilu producenta: ${scheduleSignals.join(' + ')}. Nie zmieniamy dawki, ponieważ profile Light/Standard/Heavy nie są jeszcze przypięte do zweryfikowanych tabel w bazie.`);
+  }
+
+  if (scheduleSignals.length > 1) {
+    systemWarnings.push('Warunki dają więcej niż jeden sygnał profilu SHOGUN. To konflikt kontekstu, nie powód do automatycznego wyboru mocniejszej tabeli.');
+  }
+
   if (context.medium !== 'TERRA_SOIL_PERLITE') {
     systemWarnings.push('Evidence Matrix v1 jest zatwierdzona wyłącznie dla kontekstu TERRA/SOIL + perlit.');
   }
@@ -190,6 +229,9 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     backgroundEc: context.backgroundEc,
     waterStatus,
     manufacturerWaterClass,
+    scheduleSignals,
+    scheduleProfileResolved,
+    applicationProtocols,
     waterNotes,
     products,
     systemWarnings,
