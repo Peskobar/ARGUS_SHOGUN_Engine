@@ -4,10 +4,12 @@ import {
   getProfileDosePoint,
   isTerraBaseProduct,
   ledCalMagDoseMlPerL,
+  profileCanDriveWeeklyPlan,
   resolveLedTerraWaterAdjustment,
   resolveManufacturerProfile,
 } from './manufacturerProfiles';
 import { ConflictFinding, resolveNutritionConflicts } from './nutritionConflictResolver';
+import { AbstentionReason, WORK_AUDIT_VERDICT } from './nutritionAuditLock';
 
 export interface DryRunNutritionContext {
   stage: GrowthStage;
@@ -24,7 +26,7 @@ export interface DryRunDose {
   resolvedMlPerL: number;
   adjustmentPercent: number;
   sourceId: string;
-  status: 'DIRECT' | 'CONDITIONAL';
+  status: 'DIRECT_PREVIEW' | 'CONDITIONAL';
   rationale: string;
 }
 
@@ -38,14 +40,16 @@ export interface DryRunNutritionPlan {
   conflicts: ConflictFinding[];
   blockers: ConflictFinding[];
   warnings: ConflictFinding[];
-  readyForExecutionCandidate: boolean;
+  weeklyPlanVerdict: 'HOLD';
+  abstentionReasons: AbstentionReason[];
+  readyForExecutionCandidate: false;
   autoExecutionAllowed: false;
   notes: string[];
 }
 
 /**
- * Generates a manufacturer-grounded preview only. It deliberately does not create
- * a Recipe or mutate inventory/history. The audit gate still blocks automatic execution.
+ * Manufacturer-grounded preview only. The independent Work audit holds weekly
+ * prescription until a complete current profile/generator snapshot is frozen.
  */
 export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRunNutritionPlan {
   const profile = resolveManufacturerProfile(context.manufacturerProfile ?? 'AUTO', context.usesLed);
@@ -71,13 +75,14 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
         resolvedMlPerL: Number((point.mlPerL * multiplier).toFixed(3)),
         adjustmentPercent,
         sourceId: point.sourceId,
-        status: 'DIRECT' as const,
+        status: 'DIRECT_PREVIEW' as const,
         rationale: applyWaterModifier
-          ? `${profile.label}: bazowe ${point.mlPerL} ml/L; ${waterAdjustment.rationale}`
-          : `${profile.label}: bezpośredni punkt tabeli ${point.mlPerL} ml/L.`,
+          ? `${profile.label}: preview ${point.mlPerL} ml/L; ${waterAdjustment.rationale}`
+          : `${profile.label}: preview point ${point.mlPerL} ml/L.`,
       };
     });
 
+  // Work audit: CalMag is NEEDS_USER_DATA. Never auto-add from EC/profile label alone.
   if (profile.id === 'TERRA_LED_2024') {
     const calMag = ledCalMagDoseMlPerL(context.backgroundEc, context.waterType);
     if (calMag.dose !== null) {
@@ -103,13 +108,36 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     backgroundEc: context.backgroundEc,
   });
 
+  const abstentionReasons: AbstentionReason[] = [];
+  if (!profileCanDriveWeeklyPlan(profile)) {
+    abstentionReasons.push({
+      code: 'MANUFACTURER_SNAPSHOT_UNFROZEN',
+      message: `${profile.label}: independent audit requires a frozen, reproducible current profile before weekly-plan authority.`,
+      minimumNextMeasurement: 'Freeze full current LED/generator output with complete input tuple, timestamp and source identity.',
+    });
+  }
+  if (conflictResolution.blockers.length || conflictResolution.warnings.length) {
+    abstentionReasons.push({
+      code: 'MANUFACTURER_CONFLICT',
+      message: 'Manufacturer/context conflicts remain; dry-run may explain them but cannot promote itself to an executable weekly prescription.',
+    });
+  }
+  if (context.backgroundEc === undefined) {
+    abstentionReasons.push({
+      code: 'WATER_CHEMISTRY_INCOMPLETE',
+      message: 'No live SOURCE_EC is present. A declared HARD/SOFT/RO label is not a measurement.',
+      minimumNextMeasurement: 'Measure source EC and pH; retain Ca/Mg/alkalinity as separate chemistry fields.',
+    });
+  }
+
   const notes = [
-    'DRY RUN: ten plan nie zapisuje historii, nie odejmuje magazynu i nie uruchamia Planner 2.2.',
-    'Automatyczne wykonanie pozostaje wyłączone do zakończenia niezależnego audytu agronomicznego i security gate.',
+    `INDEPENDENT AUDIT: weekly plan = ${WORK_AUDIT_VERDICT.weeklyPlan}; automatic dose = ${WORK_AUDIT_VERDICT.automaticDoseSelection}; automatic execution = ${WORK_AUDIT_VERDICT.automaticExecution}.`,
+    'DRY RUN does not write history, deduct inventory or start Planner 2.2.',
+    'Displayed ml/L values are evidence-preview points, not an approved adaptive prescription.',
   ];
 
   if (profile.id === 'TERRA_LEGACY_HARD_SOFT') {
-    notes.push('Legacy profile nadal korzysta z Evidence Matrix hard/soft; dry-run bridge v1 koncentruje się na nowym profilu LED 2024.');
+    notes.push('Legacy hard/soft source is archived/obsolete for current-plan authority and remains comparison-only.');
   }
 
   return {
@@ -122,7 +150,9 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     conflicts: conflictResolution.findings,
     blockers: conflictResolution.blockers,
     warnings: conflictResolution.warnings,
-    readyForExecutionCandidate: profile.id === 'TERRA_LED_2024' && conflictResolution.blockers.length === 0 && doses.length > 0,
+    weeklyPlanVerdict: 'HOLD',
+    abstentionReasons,
+    readyForExecutionCandidate: false,
     autoExecutionAllowed: false,
     notes,
   };
