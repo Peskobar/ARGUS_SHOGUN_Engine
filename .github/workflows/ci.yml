@@ -36,5 +36,8 @@ jobs:
       - name: Nutrition smoke
         run: npm run smoke:nutrition
 
+      - name: Nutrition integrity smoke
+        run: npm run smoke:nutrition-integrity
+
       - name: Build
         run: npm run build
