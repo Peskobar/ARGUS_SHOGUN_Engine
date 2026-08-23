@@ -37,9 +37,12 @@ export interface RecipeValidationWarning {
     | 'PRODUCT_NOT_FOUND'
     | 'FOLIAR_NOT_ALLOWED'
     | 'READY_TO_SPRAY_PRODUCT_MISMATCH'
+    | 'READY_TO_SPRAY_INGREDIENT_COUNT'
     | 'MEDIUM_MISMATCH'
     | 'INVALID_CONCENTRATION'
     | 'DUPLICATE_PRODUCT'
+    | 'UNSUPPORTED_DOSING_UNIT'
+    | 'SILICON_AFTER_BASE'
     | 'RECIPE_UNVERIFIED'
     | 'RECIPE_CONFLICT';
   productId?: string;
@@ -55,14 +58,8 @@ export interface InventoryShortage {
 }
 
 /**
- * Product-addition order for ROOT_FEED.
- *
- * Important: the process has TWO pH moments. The first one is a checkpoint
- * after Silicon and before the remaining concentrates. The final pH check is
- * performed after the complete nutrient solution is assembled. A single
- * PH_ADJUSTER role at the end cannot model that intermediate checkpoint, so
- * the checkpoint lives in buildExecutionProtocol() instead of being faked as
- * another product.
+ * Default product-addition order. It is deliberately separate from process
+ * checkpoints such as pH measurements.
  */
 const ROLE_ORDER: Record<string, number> = {
   SILICON: 100,
@@ -124,6 +121,30 @@ export function buildExecutionSteps(
 }
 
 /**
+ * Returns a safe default ingredient order based on product roles. Existing
+ * explicit mixOrder values are intentionally ignored. The caller may then let
+ * the operator override this order explicitly.
+ */
+export function orderIngredientsByRole(
+  ingredients: RecipeIngredient[],
+  products: Product[],
+): RecipeIngredient[] {
+  const productMap = new Map(products.map(product => [product.id, product]));
+
+  return ingredients
+    .map((ingredient, sourceIndex) => ({
+      ingredient,
+      sourceIndex,
+      order: roleOrder(productMap.get(ingredient.productId)?.mixingRole),
+    }))
+    .sort((a, b) => a.order - b.order || a.sourceIndex - b.sourceIndex)
+    .map(({ ingredient }, index) => ({
+      ...ingredient,
+      mixOrder: (index + 1) * 100,
+    }));
+}
+
+/**
  * Full operator-facing protocol. For ROOT_FEED it models the water start,
  * the post-Silicon pH checkpoint, EC verification and final pH verification.
  * Other application methods receive product steps only because their procedure
@@ -157,9 +178,6 @@ export function buildExecutionProtocol(
   for (const step of productSteps) {
     protocol.push({ kind: 'PRODUCT', ...step });
 
-    // Insert relative to the actual sorted product sequence. Do not re-sort the
-    // complete protocol afterwards: an explicit custom mixOrder must never be
-    // able to drag the checkpoint in front of Silicon.
     if (lastSiliconStep && step === lastSiliconStep) {
       protocol.push({
         kind: 'ACTION',
@@ -216,6 +234,14 @@ export function validateRecipeContext(
     });
   }
 
+  if (String(context.method) === 'READY_TO_SPRAY' && recipe.ingredients.length !== 1) {
+    warnings.push({
+      code: 'READY_TO_SPRAY_INGREDIENT_COUNT',
+      severity: 'ERROR',
+      message: 'Receptura READY_TO_SPRAY musi wskazywać dokładnie jeden gotowy produkt, aby zużycie magazynowe było jednoznaczne.',
+    });
+  }
+
   for (const ingredient of recipe.ingredients) {
     if (seenProducts.has(ingredient.productId)) {
       warnings.push({
@@ -256,6 +282,15 @@ export function validateRecipeContext(
       });
     }
 
+    if (ingredient.concentration > 0 && product.unit !== 'ml') {
+      warnings.push({
+        code: 'UNSUPPORTED_DOSING_UNIT',
+        productId: product.id,
+        severity: 'ERROR',
+        message: `${product.name} ma jednostkę ${product.unit}. Obecny Syringe Engine obsługuje dawkowanie objętościowe tylko w ml.`,
+      });
+    }
+
     if (String(context.method) === 'FOLIAR' && !product.foliarAllowed) {
       warnings.push({
         code: 'FOLIAR_NOT_ALLOWED',
@@ -271,6 +306,23 @@ export function validateRecipeContext(
         productId: product.id,
         severity: 'ERROR',
         message: `${product.name} nie jest produktem READY_TO_USE.`,
+      });
+    }
+  }
+
+  if (String(context.method) === 'ROOT_FEED') {
+    const steps = buildExecutionSteps(recipe, products);
+    const firstBaseIndex = steps.findIndex(step => String(step.product.mixingRole) === 'BASE');
+    const lastSiliconIndex = steps.reduce(
+      (lastIndex, step, index) => String(step.product.mixingRole) === 'SILICON' ? index : lastIndex,
+      -1,
+    );
+
+    if (firstBaseIndex >= 0 && lastSiliconIndex > firstBaseIndex) {
+      warnings.push({
+        code: 'SILICON_AFTER_BASE',
+        severity: 'ERROR',
+        message: 'Silicon jest ustawiony po nawozie bazowym. Dla ROOT_FEED kolejność musi umieścić Silicon i jego checkpoint pH przed nawozem bazowym.',
       });
     }
   }
@@ -291,7 +343,7 @@ export function findInventoryShortages(
   for (const ingredient of recipe.ingredients) {
     if (ingredient.concentration <= 0) continue;
     const product = productMap.get(ingredient.productId);
-    if (!product) continue;
+    if (!product || product.unit !== 'ml') continue;
 
     const requiredMl = roundMl(ingredient.concentration * volumeLitres);
     if (product.remainingCapacity + 0.005 < requiredMl) {
