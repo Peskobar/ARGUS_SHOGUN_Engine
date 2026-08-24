@@ -1,60 +1,72 @@
 # ARGUS SHOGUN Engine
 
-Evidence-aware execution and nutrition decision system.
+Operator-facing planner for preparing SHOGUN nutrient recipes with explicit execution order, finite syringe/pipette allocation and Reality Lock validation.
 
-## Release architecture
+## Status
 
-ARGUS separates three authorities:
+This repository separates **execution logic** from **recipe evidence**.
 
-1. **Evidence / Nutrition Technician** — explains WHY / LESS / MORE / OMIT and returns `PROCEED` or `ABSTAIN`.
-2. **Execution Policy** — validates exact context, recipe authority, protocol confirmations, measurements, inventory and physical tool measurability.
-3. **Store transaction** — the only code path allowed to mutate inventory and audit history.
+- The execution engine is responsible for ordering steps, validating context, checking physical tools and preventing impossible operations.
+- Factory recipe doses are currently marked `UNVERIFIED` and must not be treated as evidence-verified merely because the application can calculate them.
+- A recipe marked `CONFLICT` is blocked from execution until its source conflict is resolved.
 
-The physical path is:
+## User interface language
 
-`ExecutionPlanner -> evaluateExecutionReadiness() -> executeRecipe()`
+The operator-facing interface is Polish-first. Internal enums and machine identifiers remain stable in English for code compatibility, but statuses, methods, stages, execution gates, evidence labels and decision outcomes are translated before they are shown to the operator. Source titles and canonical technical identifiers may remain in their original form when translating them would reduce traceability.
 
-Legacy Planner, PlannerV2 and PlannerV3 execution paths are not part of the release architecture.
+## Reality Lock rules
 
-## Fail-closed rules
+For root-feed recipes the engine models process checkpoints, not only a flat ingredient list:
 
-Physical execution requires:
+1. start from measured base water,
+2. add Silicon according to the recipe,
+3. mix and perform the post-Silicon pH checkpoint,
+4. continue with the remaining products in the engine/recipe order,
+5. measure final EC,
+6. perform the final pH check.
 
-- exact medium / method / stage / week match,
-- `VERIFIED` recipe status,
-- `PHYSICAL_ALLOWED` execution policy,
-- safe mixing-role order,
-- confirmation of every protocol step,
-- mandatory PRE-BASE pH gate after Silicon,
-- mandatory final EC and pH values,
-- sufficient inventory,
-- a finite exact syringe/pipette allocation that respects real graduation steps.
+Concentrated products are represented as additions to water, not as concentrates to be premixed together.
 
-Factory placeholder recipes remain `UNVERIFIED / SIMULATION_ONLY` until an evidence audit explicitly promotes them.
+A custom recipe can override product order with `mixOrder`. The post-Silicon pH checkpoint is inserted relative to the actual sorted execution sequence, so it cannot accidentally move in front of Silicon.
 
-## Nutrition Technician
+## Architecture
 
-The Nutrition UI is wired directly to the Decision Kernel. It collects water chemistry, medium identity, measurement method/quality, comparable observation history, change-control policy, objective/risk and human approval.
+- `src/recipeEngine.ts` — strict recipe filtering, execution order/protocol, validation and inventory-shortage checks.
+- `src/syringeEngine.ts` — finite physical syringe/pipette allocation. One physical tool instance cannot be assigned to multiple products in one prepared set.
+- `src/store.ts` — local persisted state and atomic execution of inventory + history changes.
+- `src/data.ts` — product catalog and factory recipes. Factory doses remain `UNVERIFIED` until the evidence audit is complete.
+- `src/App.tsx` — UI wired to the domain engines. It does not maintain a competing copy of execution rules.
+- `src/uiPolish.ts` — central Polish presentation map for internal statuses, methods, stages, roles and decision terminology.
+- `scripts/backend-smoke.mjs` — regression tests for filtering, ordering, pH checkpoint placement, finite tools, validation and stock shortages.
 
-Missing or conflicting evidence produces `ABSTAIN`; the system does not fabricate a dose or silently promote a municipal/reference value to a live measurement.
+## Local development
 
-The current manufacturer profile remains fail-closed while its reproducible frozen snapshot and source conflicts are unresolved.
-
-## Commands
-
-Requires Node.js 22+.
+Requires Node.js 22 or newer.
 
 ```sh
 npm install
 npm run dev
 ```
 
-Full verification:
+Run the complete local check:
 
 ```sh
 npm run check
 ```
 
-It runs TypeScript, backend smoke, Nutrition smoke, Nutrition integrity, independent-audit checks, release-architecture regression tests and the production build.
+That runs TypeScript checking, backend smoke tests and the production build.
 
-See `docs/RELEASE_ARCHITECTURE_V1.md` for the architecture lock.
+## Safety properties
+
+The UI blocks execution when:
+
+- recipe validation reports an error,
+- the recipe has `CONFLICT` status,
+- available inventory is lower than the calculated requirement,
+- the physical syringe/pipette set cannot cover all required doses without reusing an assigned tool.
+
+`UNVERIFIED` is surfaced as a warning rather than silently presented as verified data.
+
+## Data policy
+
+Do not silently change factory doses to make tests pass. Dose values, application claims and source metadata should be changed only through an evidence-first audit with traceable sources.
