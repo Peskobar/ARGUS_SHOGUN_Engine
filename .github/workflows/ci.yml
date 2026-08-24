@@ -48,6 +48,9 @@ jobs:
       - name: Storage poisoning smoke
         run: npm run smoke:storage-poisoning
 
+      - name: Conflict regression smoke
+        run: npm run smoke:conflict-regression
+
       - name: Work audit smoke
         run: npm run smoke:work-audit
 
