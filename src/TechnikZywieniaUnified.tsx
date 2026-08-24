@@ -48,7 +48,7 @@ export default function TechnikZywieniaUnified() {
       </div>
 
       {stage === 'DECISION' ? (
-        <div className="-mx-5 -my-6">
+        <div className="-mx-5 -my-6 [&>main>div:first-child]:hidden">
           <NutritionTechnicianPanel />
         </div>
       ) : (
