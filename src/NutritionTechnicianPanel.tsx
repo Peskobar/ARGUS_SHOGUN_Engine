@@ -12,6 +12,7 @@ import { buildWeeklyNutritionPlan, compareScenario } from './nutritionTechnician
 import { RELEASE_SECURITY_GATE } from './releaseStatus';
 import { useAppStore } from './store';
 import { GrowthStage, WaterType } from './types';
+import { plBoolean, plLabel, plPhrase } from './uiPolish';
 import { buildWaterChemistryState } from './waterChemistry';
 
 const OBSERVATION_KEY = 'argus_nutrition_observations_v1';
@@ -194,9 +195,15 @@ export default function NutritionTechnicianPanel() {
   return (
     <main className="mx-auto max-w-6xl space-y-5 px-5 py-6">
       <section className={`rounded-2xl border p-5 ${kernel.disposition === 'PROCEED' ? 'border-emerald-500/25 bg-emerald-500/5' : 'border-amber-500/25 bg-amber-500/5'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em]"><ShieldCheck className="h-4 w-4" /> Decision Kernel</div><div className="mt-2 text-2xl font-black">{kernel.disposition}</div></div><Badge text={RELEASE_SECURITY_GATE.passed ? 'SECURITY PASS' : 'SECURITY GATE PENDING'} ok={RELEASE_SECURITY_GATE.passed} /></div>
-        <p className="mt-2 text-sm text-white/55">Technik nie ma osobnej drogi do Planera. Najpierw przechodzi przez pełny kernel źródeł, wody, medium, pomiarów, trendu, change-control i aprobaty człowieka.</p>
-        {kernel.readiness.reasons.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{kernel.readiness.reasons.map(reason => <div key={reason.code} className="rounded-xl border border-amber-500/15 bg-black/20 p-3 text-xs"><strong className="text-amber-200">{reason.code}</strong><div className="mt-1 text-white/55">{reason.message}</div>{reason.minimumNextMeasurement && <div className="mt-1 text-cyan-200/70">Następny krok: {reason.minimumNextMeasurement}</div>}</div>)}</div>}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em]"><ShieldCheck className="h-4 w-4" /> Rdzeń Decyzyjny</div>
+            <div className="mt-2 text-2xl font-black">{plLabel(kernel.disposition)}</div>
+          </div>
+          <Badge text={RELEASE_SECURITY_GATE.passed ? 'KONTROLA BEZPIECZEŃSTWA ZALICZONA' : 'KONTROLA BEZPIECZEŃSTWA OCZEKUJE'} ok={RELEASE_SECURITY_GATE.passed} />
+        </div>
+        <p className="mt-2 text-sm text-white/55">Technik nie ma osobnej drogi do Planera. Najpierw przechodzi przez pełny rdzeń źródeł, wody, podłoża, pomiarów, trendu, kontroli zmian i zatwierdzenia przez człowieka.</p>
+        {kernel.readiness.reasons.length > 0 && <div className="mt-4 grid gap-2 md:grid-cols-2">{kernel.readiness.reasons.map(reason => <div key={reason.code} className="rounded-xl border border-amber-500/15 bg-black/20 p-3 text-xs"><strong className="text-amber-200">Powód blokady</strong><div className="mt-1 text-white/55">{plPhrase(reason.message)}</div>{reason.minimumNextMeasurement && <div className="mt-1 text-cyan-200/70">Następny krok: {plPhrase(reason.minimumNextMeasurement)}</div>}</div>)}</div>}
       </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -207,20 +214,69 @@ export default function NutritionTechnicianPanel() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card title="1. Woda" subtitle="Live sample ma pierwszeństwo; analiza miejska pozostaje referencją."><Field label="SOURCE EC mS/cm" value={sourceEc} onChange={setSourceEc} /><Field label="pH wody" value={waterPh} onChange={setWaterPh} /><Field label="Ca mg/L" value={calcium} onChange={setCalcium} /><Field label="Mg mg/L" value={magnesium} onChange={setMagnesium} /><Field label="Alkaliczność mmol/L" value={alkalinity} onChange={setAlkalinity} /></Card>
-        <Card title="2. Medium" subtitle="Tożsamość i początkowy ładunek nie są zgadywane."><TextField label="Produkt / nazwa medium" value={mediumName} onChange={setMediumName} /><Toggle label="Znany początkowy ładunek nawozowy" checked={initialChargeKnown} onChange={setInitialChargeKnown} /><Field label="Perlit %" value={perlitePct} onChange={setPerlitePct} /><Field label="Objętość donicy L" value={potVolume} onChange={setPotVolume} /></Card>
-        <Card title="3. Pomiary" subtitle="EC bez metody i jakości pomiaru nie dostaje władzy decyzyjnej."><Field label="Final INPUT EC" value={preparedEc} onChange={setPreparedEc} /><Field label="Final pH" value={finalPh} onChange={setFinalPh} /><Field label="Runoff EC" value={runoffEc} onChange={setRunoffEc} /><Field label="Runoff %" value={runoffFraction} onChange={setRunoffFraction} /><Field label="Substrate EC" value={substrateEc} onChange={setSubstrateEc} /><Select value={substrateMethod} onChange={value => setSubstrateMethod(value as SubstrateEcMethod)} options={['UNKNOWN', 'POUR_THROUGH', 'PORE_WATER', 'SME', 'IN_SITU_SENSOR', 'OTHER']} /><Field label="Dryback %" value={dryback} onChange={setDryback} /></Card>
+        <Card title="1. Woda" subtitle="Bieżąca próbka ma pierwszeństwo; analiza miejska pozostaje tylko punktem odniesienia.">
+          <Field label="EC wody źródłowej mS/cm" value={sourceEc} onChange={setSourceEc} />
+          <Field label="pH wody" value={waterPh} onChange={setWaterPh} />
+          <Field label="Wapń Ca mg/L" value={calcium} onChange={setCalcium} />
+          <Field label="Magnez Mg mg/L" value={magnesium} onChange={setMagnesium} />
+          <Field label="Alkaliczność mmol/L" value={alkalinity} onChange={setAlkalinity} />
+        </Card>
+        <Card title="2. Podłoże" subtitle="Tożsamość i początkowy ładunek nie są zgadywane.">
+          <TextField label="Produkt / nazwa podłoża" value={mediumName} onChange={setMediumName} />
+          <Toggle label="Znany początkowy ładunek nawozowy" checked={initialChargeKnown} onChange={setInitialChargeKnown} />
+          <Field label="Perlit %" value={perlitePct} onChange={setPerlitePct} />
+          <Field label="Objętość donicy L" value={potVolume} onChange={setPotVolume} />
+        </Card>
+        <Card title="3. Pomiary" subtitle="EC bez znanej metody i jakości pomiaru nie dostaje prawa do sterowania decyzją.">
+          <Field label="Końcowe EC pożywki" value={preparedEc} onChange={setPreparedEc} />
+          <Field label="Końcowe pH" value={finalPh} onChange={setFinalPh} />
+          <Field label="EC odpływu" value={runoffEc} onChange={setRunoffEc} />
+          <Field label="Odpływ %" value={runoffFraction} onChange={setRunoffFraction} />
+          <Field label="EC podłoża" value={substrateEc} onChange={setSubstrateEc} />
+          <Control label="Metoda pomiaru EC podłoża"><Select value={substrateMethod} onChange={value => setSubstrateMethod(value as SubstrateEcMethod)} options={['UNKNOWN', 'POUR_THROUGH', 'PORE_WATER', 'SME', 'IN_SITU_SENSOR', 'OTHER']} /></Control>
+          <Field label="Przesuszenie %" value={dryback} onChange={setDryback} />
+        </Card>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card title="4. Jakość pomiaru"><TextField label="Model miernika" value={meterModel} onChange={setMeterModel} /><TextField label="Data kalibracji" value={calibrationDate} onChange={setCalibrationDate} type="date" /><TextField label="Protokół pobrania próbki" value={samplingProtocol} onChange={setSamplingProtocol} /><button type="button" onClick={addObservation} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-bold text-cyan-200"><Plus className="h-4 w-4" />Dodaj bieżący pomiar do historii</button><div className="mt-2 flex items-center justify-between text-xs text-white/40"><span>Historia: {observations.length}</span>{observations.length > 0 && <button type="button" onClick={() => setObservations([])} className="flex items-center gap-1 text-red-300"><Trash2 className="h-3 w-3" />wyczyść</button>}</div></Card>
-        <Card title="5. Trend + change-control"><Field label="Minimalna liczba porównywalnych próbek" value={minimumSamples} onChange={setMinimumSamples} /><Field label="Maksymalna zmiana %" value={maxDelta} onChange={setMaxDelta} /><Field label="Okno obserwacji h" value={observationWindowHours} onChange={setObservationWindowHours} /><Toggle label="STOP criteria zdefiniowane" checked={stopCriteriaDefined} onChange={setStopCriteriaDefined} /><Toggle label="Rollback criteria zdefiniowane" checked={rollbackCriteriaDefined} onChange={setRollbackCriteriaDefined} /></Card>
-        <Card title="6. Autoryzacja"><Toggle label="Wykluczono lockout / problem fizjologiczny" checked={physiologicalLockoutExcluded} onChange={setPhysiologicalLockoutExcluded} /><Toggle label="Final EC potwierdzony" checked={finalEcConfirmed} onChange={setFinalEcConfirmed} /><Toggle label="Final pH potwierdzony" checked={finalPhConfirmed} onChange={setFinalPhConfirmed} /><Toggle label="Human approval" checked={humanApproved} onChange={setHumanApproved} /><Toggle label="LED" checked={usesLed} onChange={setUsesLed} /><Select value={objective} onChange={value => setObjective(value as typeof objective)} options={['STABILITY', 'QUALITY', 'YIELD', 'RECOVERY', 'UNKNOWN']} /><Select value={riskTolerance} onChange={value => setRiskTolerance(value as typeof riskTolerance)} options={['LOW', 'MEDIUM', 'HIGH', 'UNSET']} /></Card>
+        <Card title="4. Jakość pomiaru">
+          <TextField label="Model miernika" value={meterModel} onChange={setMeterModel} />
+          <TextField label="Data kalibracji" value={calibrationDate} onChange={setCalibrationDate} type="date" />
+          <TextField label="Protokół pobrania próbki" value={samplingProtocol} onChange={setSamplingProtocol} />
+          <button type="button" onClick={addObservation} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-bold text-cyan-200"><Plus className="h-4 w-4" />Dodaj bieżący pomiar do historii</button>
+          <div className="mt-2 flex items-center justify-between text-xs text-white/40"><span>Historia: {observations.length}</span>{observations.length > 0 && <button type="button" onClick={() => setObservations([])} className="flex items-center gap-1 text-red-300"><Trash2 className="h-3 w-3" />wyczyść</button>}</div>
+        </Card>
+        <Card title="5. Trend + kontrola zmian">
+          <Field label="Minimalna liczba porównywalnych próbek" value={minimumSamples} onChange={setMinimumSamples} />
+          <Field label="Maksymalna zmiana %" value={maxDelta} onChange={setMaxDelta} />
+          <Field label="Okno obserwacji h" value={observationWindowHours} onChange={setObservationWindowHours} />
+          <Toggle label="Kryteria ZATRZYMANIA zdefiniowane" checked={stopCriteriaDefined} onChange={setStopCriteriaDefined} />
+          <Toggle label="Kryteria WYCOFANIA zdefiniowane" checked={rollbackCriteriaDefined} onChange={setRollbackCriteriaDefined} />
+        </Card>
+        <Card title="6. Autoryzacja">
+          <Toggle label="Wykluczono blokadę pobierania / problem fizjologiczny" checked={physiologicalLockoutExcluded} onChange={setPhysiologicalLockoutExcluded} />
+          <Toggle label="Końcowe EC potwierdzone" checked={finalEcConfirmed} onChange={setFinalEcConfirmed} />
+          <Toggle label="Końcowe pH potwierdzone" checked={finalPhConfirmed} onChange={setFinalPhConfirmed} />
+          <Toggle label="Zatwierdzenie przez człowieka" checked={humanApproved} onChange={setHumanApproved} />
+          <Toggle label="Oświetlenie LED" checked={usesLed} onChange={setUsesLed} />
+          <Control label="Cel działania"><Select value={objective} onChange={value => setObjective(value as typeof objective)} options={['STABILITY', 'QUALITY', 'YIELD', 'RECOVERY', 'UNKNOWN']} /></Control>
+          <Control label="Tolerancja ryzyka"><Select value={riskTolerance} onChange={value => setRiskTolerance(value as typeof riskTolerance)} options={['LOW', 'MEDIUM', 'HIGH', 'UNSET']} /></Control>
+        </Card>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-12">
-        <div className="lg:col-span-5"><Card title="Evidence preview" subtitle={`${profile.label} · ${profile.auditStatus} · snapshotFrozen=${profile.snapshotFrozen}`}><div className="space-y-2">{conflictResolution.findings.map(finding => <div key={`${finding.code}-${finding.title}`} className={`rounded-xl border p-3 text-xs ${finding.severity === 'BLOCK' ? 'border-red-500/20 bg-red-500/5' : finding.severity === 'WARN' ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/10 bg-black/20'}`}><strong>{finding.severity} · {finding.title}</strong><div className="mt-1 text-white/45">{finding.action}</div></div>)}</div></Card></div>
-        <div className="lg:col-span-7"><Card title="WHY / LESS / MORE / OMIT" subtitle="Warstwa wyjaśniająca. Nie nadaje sama sobie prawa do wykonania."><div className="flex flex-wrap gap-2">{plan.products.map(product => <button key={product.productId} type="button" onClick={() => setSelectedProductId(product.productId)} className={`rounded-lg border px-2 py-1 text-xs ${selectedProductId === product.productId ? 'border-cyan-400/40 bg-cyan-500/10' : 'border-white/10 bg-black/20'}`}>{store.getProduct(product.productId)?.name ?? product.productId}</button>)}</div>{selectedProductId && <div className="mt-3 flex gap-1">{SCENARIOS.map(item => <button key={item.id} type="button" onClick={() => setScenario(item.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${scenario === item.id ? 'bg-cyan-500 text-black' : 'bg-white/5 text-white/50'}`}>{item.label}</button>)}</div>}{selectedDecision && <div className="mt-4 space-y-3"><div className="flex flex-wrap gap-2"><Badge text={selectedDecision.status} ok={selectedDecision.status === 'VERIFIED'} /><Badge text={`confidence ${selectedDecision.confidence}`} ok={selectedDecision.confidence === 'HIGH'} /></div>{selectedDecision.decisionText.map((text, index) => <p key={`d-${index}`} className="text-sm leading-relaxed text-white/60">{text}</p>)}{selectedDecision.hardRules.length > 0 && <List title="Twarde reguły" items={selectedDecision.hardRules} />}{selectedDecision.unresolved.length > 0 && <List title="Nierozstrzygnięte" items={selectedDecision.unresolved} warning />}{selectedDecision.refs.length > 0 && <div className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="mb-2 flex items-center gap-1 text-xs font-bold"><BookOpen className="h-3.5 w-3.5" />Źródła</div>{selectedDecision.refs.map(ref => <div key={ref.id} className="text-[11px] text-white/45">{ref.sourceType} · {ref.title} · {ref.applicability} · {ref.confidence}</div>)}</div>}</div>}</Card></div>
+        <div className="lg:col-span-5">
+          <Card title="Podgląd dowodów" subtitle={`${profile.label} · status audytu: ${plLabel(profile.auditStatus)} · zamrożony zestaw źródeł: ${plBoolean(profile.snapshotFrozen)}`}>
+            <div className="space-y-2">{conflictResolution.findings.map(finding => <div key={`${finding.code}-${finding.title}`} className={`rounded-xl border p-3 text-xs ${finding.severity === 'BLOCK' ? 'border-red-500/20 bg-red-500/5' : finding.severity === 'WARN' ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/10 bg-black/20'}`}><strong>{plLabel(finding.severity)} · {plPhrase(finding.title)}</strong><div className="mt-1 text-white/45">{plPhrase(finding.action)}</div></div>)}</div>
+          </Card>
+        </div>
+        <div className="lg:col-span-7">
+          <Card title="DLACZEGO / MNIEJ / WIĘCEJ / POMIŃ" subtitle="Warstwa wyjaśniająca. Sama nie nadaje prawa do fizycznego wykonania.">
+            <div className="flex flex-wrap gap-2">{plan.products.map(product => <button key={product.productId} type="button" onClick={() => setSelectedProductId(product.productId)} className={`rounded-lg border px-2 py-1 text-xs ${selectedProductId === product.productId ? 'border-cyan-400/40 bg-cyan-500/10' : 'border-white/10 bg-black/20'}`}>{store.getProduct(product.productId)?.name ?? product.productId}</button>)}</div>
+            {selectedProductId && <div className="mt-3 flex gap-1">{SCENARIOS.map(item => <button key={item.id} type="button" onClick={() => setScenario(item.id)} className={`rounded-lg px-3 py-2 text-xs font-bold ${scenario === item.id ? 'bg-cyan-500 text-black' : 'bg-white/5 text-white/50'}`}>{item.label}</button>)}</div>}
+            {selectedDecision && <div className="mt-4 space-y-3"><div className="flex flex-wrap gap-2"><Badge text={plLabel(selectedDecision.status)} ok={selectedDecision.status === 'VERIFIED'} /><Badge text={`Pewność: ${plLabel(selectedDecision.confidence)}`} ok={selectedDecision.confidence === 'HIGH'} /></div>{selectedDecision.decisionText.map((text, index) => <p key={`d-${index}`} className="text-sm leading-relaxed text-white/60">{plPhrase(text)}</p>)}{selectedDecision.hardRules.length > 0 && <List title="Twarde reguły" items={selectedDecision.hardRules.map(plPhrase)} />}{selectedDecision.unresolved.length > 0 && <List title="Nierozstrzygnięte" items={selectedDecision.unresolved.map(plPhrase)} warning />}{selectedDecision.refs.length > 0 && <div className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="mb-2 flex items-center gap-1 text-xs font-bold"><BookOpen className="h-3.5 w-3.5" />Źródła</div>{selectedDecision.refs.map(ref => <div key={ref.id} className="text-[11px] text-white/45">{plLabel(ref.sourceType)} · {ref.title} · zastosowanie: {plLabel(ref.applicability)} · pewność: {plLabel(ref.confidence)}</div>)}</div>}</div>}
+          </Card>
+        </div>
       </section>
     </main>
   );
@@ -234,6 +290,6 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="block text-xs text-white/40">{label}<input className="mt-1 w-full rounded-lg border border-white/10 bg-black px-3 py-2 font-mono text-sm text-white" type="number" step="0.01" value={value} onChange={event => onChange(event.target.value)} /></label>; }
 function TextField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="block text-xs text-white/40">{label}<input className="mt-1 w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white" type={type} value={value} onChange={event => onChange(event.target.value)} /></label>; }
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/55"><span>{label}</span><input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} /></label>; }
-function Select({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: string[] }) { return <select className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white" value={value} onChange={event => onChange(event.target.value)}>{options.map(option => <option key={option} value={option}>{option}</option>)}</select>; }
+function Select({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: string[] }) { return <select className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white" value={value} onChange={event => onChange(event.target.value)}>{options.map(option => <option key={option} value={option}>{plLabel(option)}</option>)}</select>; }
 function Badge({ text, ok }: { text: string; ok: boolean }) { return <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wider ${ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>{text}</span>; }
 function List({ title, items, warning = false }: { title: string; items: string[]; warning?: boolean }) { return <div className={`rounded-xl border p-3 ${warning ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/10 bg-black/20'}`}><div className="mb-2 flex items-center gap-1 text-xs font-bold">{warning && <AlertTriangle className="h-3.5 w-3.5" />}{title}</div><ul className="space-y-1 text-xs text-white/50">{items.map((item, index) => <li key={index}>• {item}</li>)}</ul></div>; }
