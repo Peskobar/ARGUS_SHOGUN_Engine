@@ -1,3 +1,5 @@
+import { canonicalProductOrder } from './canonicalMixingSequence';
+import { SHOGUN_PRODUCTS } from './data';
 import { GrowthStage, WaterType } from './types';
 import {
   DecisionScenario,
@@ -80,6 +82,15 @@ export interface WeeklyNutritionPlan {
 }
 
 const ALL_PRODUCT_EVIDENCE: ProductEvidence[] = [SHOGUN_START_EVIDENCE, ...TERRA_EVIDENCE_MATRIX];
+const PRODUCT_BY_ID = new Map(SHOGUN_PRODUCTS.map(product => [product.id, product]));
+
+function compareProductDecisionsByCanonicalExecution(a: ProductDecision, b: ProductDecision) {
+  const productA = PRODUCT_BY_ID.get(a.productId);
+  const productB = PRODUCT_BY_ID.get(b.productId);
+  const orderA = productA ? canonicalProductOrder(productA) : Number.MAX_SAFE_INTEGER;
+  const orderB = productB ? canonicalProductOrder(productB) : Number.MAX_SAFE_INTEGER;
+  return orderA - orderB || a.productId.localeCompare(b.productId);
+}
 
 function resolveProductEvidence(productId: string) {
   return getProductEvidence(productId) ?? (productId === SHOGUN_START_EVIDENCE.productId ? SHOGUN_START_EVIDENCE : undefined);
@@ -307,7 +318,8 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   const products = ALL_PRODUCT_EVIDENCE
     .map(entry => evaluateProductDecision(entry.productId, context, 'BASELINE'))
     .filter((decision): decision is ProductDecision => Boolean(decision))
-    .filter(decision => decision.doseWindows.length > 0);
+    .filter(decision => decision.doseWindows.length > 0)
+    .sort(compareProductDecisionsByCanonicalExecution);
 
   const conflictResolution = resolveNutritionConflicts({
     profile,
