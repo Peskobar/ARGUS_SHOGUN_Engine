@@ -42,6 +42,9 @@ jobs:
       - name: Unified nutrition workflow smoke
         run: npm run smoke:unified-workflow
 
+      - name: Technik Zywienia Planner parity smoke
+        run: npm run smoke:technician-planner-parity
+
       - name: Numeric adversarial smoke
         run: npm run smoke:numeric-adversarial
 
