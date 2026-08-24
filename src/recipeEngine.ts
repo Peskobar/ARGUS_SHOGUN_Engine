@@ -1,4 +1,4 @@
-import { canonicalRoleOrder } from './canonicalMixingSequence';
+import { canonicalRoleOrder } from './canonicalMixingSequence.ts';
 import type {
   ApplicationMethod,
   GrowthStage,
