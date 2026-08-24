@@ -64,7 +64,7 @@ export function buildExecutionSteps(
   const productMap = new Map(products.map(product => [product.id, product]));
 
   return recipe.ingredients
-    .map((ingredient, index) => {
+    .map((ingredient, index): RecipeExecutionStep | null => {
       const product = productMap.get(ingredient.productId);
       if (!product) return null;
 
@@ -77,7 +77,7 @@ export function buildExecutionSteps(
         order: executionOrder,
       };
     })
-    .filter((step): step is RecipeExecutionStep => Boolean(step))
+    .filter((step): step is RecipeExecutionStep => step !== null)
     .sort((a, b) => a.executionOrder - b.executionOrder || a.product.name.localeCompare(b.product.name));
 }
 
