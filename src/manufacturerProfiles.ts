@@ -1,3 +1,4 @@
+import { normalizeSourceEc } from './numericGuards';
 import { GrowthStage, WaterType } from './types';
 
 export type ManufacturerProfileId = 'TERRA_LEGACY_HARD_SOFT' | 'TERRA_LED_2024';
@@ -194,17 +195,18 @@ export function getProfileDosePoint(profile: ManufacturerProfile, productId: str
 export function resolveLedTerraWaterAdjustment(backgroundEc?: number, waterType?: WaterType): WaterAdjustmentResolution {
   const sourceId = 'shogun-led-terra-2024';
   const close = (value: number, anchor: number) => Math.abs(value - anchor) <= 0.03;
+  const ec = normalizeSourceEc(backgroundEc);
 
-  if (backgroundEc !== undefined && Number.isFinite(backgroundEc) && backgroundEc >= 0) {
-    if (close(backgroundEc, 0)) return { percent: 20, multiplier: 1.2, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC ~0 → +20% Terra base.', sourceId };
-    if (close(backgroundEc, 0.2)) return { percent: 10, multiplier: 1.1, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC ~0.2 → +10% Terra base.', sourceId };
-    if (close(backgroundEc, 0.4)) return { percent: 0, multiplier: 1, status: 'BASELINE', rationale: 'Preview LED source anchor: source EC ~0.4 baseline.', sourceId };
-    if (backgroundEc >= 0.6) return { percent: -10, multiplier: 0.9, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC 0.6+ → −10% Terra base.', sourceId };
+  if (ec !== undefined) {
+    if (close(ec, 0)) return { percent: 20, multiplier: 1.2, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC ~0 → +20% Terra base.', sourceId };
+    if (close(ec, 0.2)) return { percent: 10, multiplier: 1.1, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC ~0.2 → +10% Terra base.', sourceId };
+    if (close(ec, 0.4)) return { percent: 0, multiplier: 1, status: 'BASELINE', rationale: 'Preview LED source anchor: source EC ~0.4 baseline.', sourceId };
+    if (ec >= 0.6) return { percent: -10, multiplier: 0.9, status: 'EXACT_RULE', rationale: 'Preview LED source anchor: source EC 0.6+ → −10% Terra base.', sourceId };
     return {
       percent: 0,
       multiplier: 1,
       status: 'UNRESOLVED_BETWEEN_ANCHORS',
-      rationale: `Measured source EC ${backgroundEc.toFixed(2)} lies between explicit preview anchors. No interpolation is performed.`,
+      rationale: `Measured source EC ${ec.toFixed(2)} lies between explicit preview anchors. No interpolation is performed.`,
       sourceId,
     };
   }
@@ -220,13 +222,14 @@ export function resolveLedTerraWaterAdjustment(backgroundEc?: number, waterType?
     percent: 0,
     multiplier: 1,
     status: 'UNRESOLVED_BETWEEN_ANCHORS',
-    rationale: `Water declared as ${declaration}, but source EC is not a live measurement. No numeric water adjustment is inferred from the label.`,
+    rationale: `Water declared as ${declaration}, but source EC is not a valid live measurement. No numeric water adjustment is inferred from the label.`,
     sourceId,
   };
 }
 
 export function ledCalMagDoseMlPerL(backgroundEc?: number, waterType?: WaterType): { dose: number | null; rationale: string } {
-  const ecText = backgroundEc !== undefined && Number.isFinite(backgroundEc) ? `source EC ${backgroundEc.toFixed(2)}` : 'source EC unknown';
+  const ec = normalizeSourceEc(backgroundEc);
+  const ecText = ec !== undefined ? `source EC ${ec.toFixed(2)}` : 'source EC unknown/invalid';
   const label = waterType ?? WaterType.CUSTOM;
   return {
     dose: null,
