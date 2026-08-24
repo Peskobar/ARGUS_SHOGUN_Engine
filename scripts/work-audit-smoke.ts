@@ -35,10 +35,21 @@ assert.equal(EMMERICH_WATER_REFERENCE_2026.backgroundEcMsCmApprox, 0.557);
 assert.equal(EMMERICH_WATER_REFERENCE_2026.calciumMgL, 75.5);
 assert.equal(EMMERICH_WATER_REFERENCE_2026.magnesiumMgL, 10.4);
 assert.equal(EMMERICH_WATER_REFERENCE_2026.alkalinityMmolLToPh43, 3.11);
-const water = buildWaterChemistryState({ backgroundEc: 0.56, pH: 7.4 });
-assert.equal(water.backgroundEc?.source, 'USER_MEASUREMENT');
-assert.equal(water.calciumMgL?.source, 'LOCAL_WATER_REFERENCE');
-assert.equal(water.chemistryCompleteForAdaptiveCalMag, true, 'live EC + reference Ca/Mg/alkalinity is context-complete, but not proof of current ion concentrations');
+
+const partialLiveWater = buildWaterChemistryState({ backgroundEc: 0.56, pH: 7.4 });
+assert.equal(partialLiveWater.backgroundEc?.source, 'USER_MEASUREMENT');
+assert.equal(partialLiveWater.calciumMgL?.source, 'LOCAL_WATER_REFERENCE');
+assert.equal(partialLiveWater.chemistryCompleteForAdaptiveCalMag, false, 'municipal Ca/Mg/buffer cannot satisfy a live adaptive-dose gate');
+
+const fullyLiveWater = buildWaterChemistryState({
+  backgroundEc: 0.56,
+  pH: 7.4,
+  calciumMgL: 75,
+  magnesiumMgL: 11,
+  alkalinityMmolLToPh43: 3.1,
+});
+assert.equal(fullyLiveWater.chemistryCompleteForAdaptiveCalMag, true);
+assert.equal(fullyLiveWater.calciumMgL?.source, 'USER_MEASUREMENT');
 
 const symptom = assessSymptoms({
   tags: ['INTERVEINAL_CHLOROSIS'],
