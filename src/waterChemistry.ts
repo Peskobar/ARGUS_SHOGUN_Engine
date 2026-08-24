@@ -45,9 +45,10 @@ function choose(userValue: number | undefined, referenceValue?: number): Provena
 }
 
 /**
- * Field-level provenance. A live user measurement overrides only the field that
- * was actually measured. Municipal chemistry stays visible as reference and may
- * never masquerade as a live sample.
+ * Field-level provenance. A municipal/reference value may inform explanation,
+ * but cannot satisfy a live adaptive-dose gate. Adaptive CalMag authority
+ * requires a live source EC plus live Ca, Mg and live buffer chemistry from the
+ * current water sample. This deliberately fails closed.
  */
 export function buildWaterChemistryState(
   user: WaterChemistryInput,
@@ -78,31 +79,35 @@ export function buildWaterChemistryState(
     notes: [],
   };
 
-  const liveEc = state.backgroundEc?.source === 'USER_MEASUREMENT';
-  const hasCa = state.calciumMgL !== undefined;
-  const hasMg = state.magnesiumMgL !== undefined;
-  const hasBuffer = state.alkalinityMmolLToPh43 !== undefined || state.bicarbonateMgL !== undefined;
-  state.chemistryCompleteForAdaptiveCalMag = Boolean(liveEc && hasCa && hasMg && hasBuffer);
+  const liveEc = isLive(state.backgroundEc);
+  const liveCa = isLive(state.calciumMgL);
+  const liveMg = isLive(state.magnesiumMgL);
+  const liveBuffer = isLive(state.alkalinityMmolLToPh43) || isLive(state.bicarbonateMgL);
+  state.chemistryCompleteForAdaptiveCalMag = liveEc && liveCa && liveMg && liveBuffer;
 
   if (state.backgroundEc?.source === 'LOCAL_WATER_REFERENCE') {
-    state.notes.push('SOURCE_EC comes from Stadtwerke Emmerich 09.03.2026 reference (0.557 mS/cm), not the current tap. It cannot trigger an automatic dose modifier.');
+    state.notes.push('SOURCE_EC comes from Stadtwerke Emmerich reference, not the current tap sample. It cannot trigger an automatic dose modifier.');
   }
   if (state.calciumMgL?.source === 'LOCAL_WATER_REFERENCE' || state.magnesiumMgL?.source === 'LOCAL_WATER_REFERENCE') {
-    state.notes.push('Municipal Ca/Mg are contextual values, not proof of the exact mixing-day water sample.');
+    state.notes.push('Municipal Ca/Mg are contextual values only. They do not satisfy the live chemistry gate for adaptive CalMag.');
   }
-  if (!hasBuffer) {
-    state.notes.push('Alkalinity/HCO3 context is unresolved; pH alone does not describe buffering capacity.');
+  if (!liveBuffer) {
+    state.notes.push('Live alkalinity/HCO3 context is unresolved; pH alone does not describe current buffering capacity.');
   }
   if (!state.sodiumMgL || !state.chlorideMgL) {
     state.notes.push('Na/Cl are unresolved in the current user-input model; total EC cannot identify them.');
   }
   if (!state.chemistryCompleteForAdaptiveCalMag) {
-    state.notes.push('Adaptive CalMag remains ABSTAIN: EC/water label alone is insufficient.');
+    state.notes.push('Adaptive CalMag remains ABSTAIN: live EC + live Ca + live Mg + live alkalinity/HCO3 are required.');
   }
 
   return state;
 }
 
 export function hasLiveBackgroundEc(state: WaterChemistryState) {
-  return state.backgroundEc?.source === 'USER_MEASUREMENT' && state.backgroundEc.liveMeasurement;
+  return isLive(state.backgroundEc);
+}
+
+function isLive(value?: ProvenancedNumber): boolean {
+  return value?.source === 'USER_MEASUREMENT' && value.liveMeasurement;
 }
