@@ -62,6 +62,15 @@ export interface Product {
 export interface RecipeIngredient {
   productId: string;
   concentration: number; // ml/L, 0 if READY_TO_SPRAY
+  /**
+   * Order copied from the manufacturer/source document. Presentation/provenance
+   * only. It must never become physical execution authority.
+   */
+  sourceOrder?: number;
+  /**
+   * Legacy/manual authoring order. Presentation metadata only on canonical
+   * execution surfaces.
+   */
   mixOrder?: number;
 }
 
