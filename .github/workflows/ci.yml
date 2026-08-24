@@ -39,6 +39,9 @@ jobs:
       - name: Nutrition integrity smoke
         run: npm run smoke:nutrition-integrity
 
+      - name: Unified nutrition workflow smoke
+        run: npm run smoke:unified-workflow
+
       - name: Work audit smoke
         run: npm run smoke:work-audit
 
