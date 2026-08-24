@@ -296,7 +296,7 @@ function Notice({ title, tone, lines }: { title: string; tone: 'blue' | 'amber';
   return <div className={`rounded-2xl border p-5 ${amber ? 'border-amber-500/20 bg-amber-500/5' : 'border-blue-500/20 bg-blue-500/5'}`}><div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] ${amber ? 'text-amber-300' : 'text-blue-300'}`}>{amber && <AlertTriangle className="h-4 w-4" />}{title}</div><ul className="mt-3 space-y-2 text-xs leading-relaxed text-white/60">{lines.map(line => <li key={line}>• {line}</li>)}</ul></div>;
 }
 
-function ProductRow({ index, decision, name, onOpen }: { index: number; decision: ProductDecision; name: string; onOpen: () => void }) {
+function ProductRow({ index, decision, name, onOpen }: { key?: string; index: number; decision: ProductDecision; name: string; onOpen: () => void }) {
   const verification = PRODUCT_VERIFICATION[decision.productId];
   const doseLabel = decision.doseWindows.map(window => {
     const range = window.minMlPerL === window.maxMlPerL ? `${window.minMlPerL} ml/L` : `${window.minMlPerL}–${window.maxMlPerL} ml/L`;
