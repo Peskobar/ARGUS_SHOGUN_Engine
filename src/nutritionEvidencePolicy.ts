@@ -1,3 +1,4 @@
+import { normalizeSourceEc } from './numericGuards';
 import { GrowthStage, WaterType } from './types';
 
 export type VerificationDimensionStatus = 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'CONFLICT';
@@ -122,9 +123,10 @@ export const PARTIAL_SDS_COMPOSITION = {
 } as const;
 
 export function classifyShogunWaterFromMeasuredEc(backgroundEc?: number): WaterType | 'BOUNDARY' | null {
-  if (backgroundEc === undefined || !Number.isFinite(backgroundEc) || backgroundEc < 0) return null;
-  if (backgroundEc > 0.4) return WaterType.HARD;
-  if (backgroundEc < 0.4) return WaterType.SOFT;
+  const ec = normalizeSourceEc(backgroundEc);
+  if (ec === undefined) return null;
+  if (ec > 0.4) return WaterType.HARD;
+  if (ec < 0.4) return WaterType.SOFT;
   return 'BOUNDARY';
 }
 
