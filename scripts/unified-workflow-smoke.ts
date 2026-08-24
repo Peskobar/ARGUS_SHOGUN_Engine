@@ -123,4 +123,24 @@ assert.throws(
   /INVALID_EXECUTION_CONTEXT/,
 );
 
+// Unknown/unsupported execution metadata must fail closed rather than disappear.
+const missingRole: Product = { ...byId('zenzym'), id: 'unknown-role', mixingRole: undefined };
+assert.throws(
+  () => buildNutritionExecutionWorkflow([byId('samurai-terra-grow'), missingRole]),
+  /MISSING_MIXING_ROLE/,
+);
+
+const phAdjuster: Product = { ...byId('zenzym'), id: 'ph-adjuster-test', mixingRole: MixingRole.PH_ADJUSTER };
+assert.throws(
+  () => buildNutritionExecutionWorkflow([byId('samurai-terra-grow'), phAdjuster]),
+  /UNSUPPORTED_EXECUTION_ROLE/,
+  'pH adjuster stays outside automatic nutrient-product sequence and is handled by final gate',
+);
+
+// Duplicate physical identity cannot produce ambiguous repeated step IDs.
+assert.throws(
+  () => buildNutritionExecutionWorkflow([byId('silicon'), byId('silicon')]),
+  /DUPLICATE_EXECUTION_PRODUCT/,
+);
+
 console.log('unified nutrition workflow smoke: PASS');
