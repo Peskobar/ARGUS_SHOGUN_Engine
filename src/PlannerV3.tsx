@@ -5,7 +5,7 @@ import { buildExecutionSteps, filterRecipes, validateRecipeContext } from './rec
 import { useAppStore } from './store';
 import { allocateToolSet } from './syringeEngine';
 import { FINAL_MIX, getMixingInstruction, SETTLE_SECONDS } from './mixingProtocol';
-import { AllocationMode, ApplicationMethod, GrowthStage, Medium, WaterType } from './types';
+import { AllocationMode, ApplicationMethod, GrowthStage, Medium, MixingRole, WaterType } from './types';
 
 const ALLOCATION_MODES: Array<{ value: AllocationMode; label: string; description: string }> = [
   {
@@ -38,12 +38,18 @@ export default function PlannerV3() {
   const [method, setMethod] = useState<ApplicationMethod>(ApplicationMethod.ROOT_FEED);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [volume, setVolume] = useState(8);
+  const [directUseVolumeMl, setDirectUseVolumeMl] = useState(0);
   const [allocationMode, setAllocationMode] = useState<AllocationMode>('PRECISION');
   const [executionActive, setExecutionActive] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
+  const [preBasePhGateDone, setPreBasePhGateDone] = useState(false);
+  const [preBasePh, setPreBasePh] = useState('');
   const [finalMixDone, setFinalMixDone] = useState(false);
   const [settleDone, setSettleDone] = useState(false);
+  const [finalGateDone, setFinalGateDone] = useState(false);
+  const [finalEc, setFinalEc] = useState('');
+  const [finalPh, setFinalPh] = useState('');
   const [executionMessage, setExecutionMessage] = useState('');
 
   const availableRecipes = useMemo(
@@ -70,12 +76,18 @@ export default function PlannerV3() {
     setExecutionActive(false);
     setCompletedSteps([]);
     setActiveTimer(null);
+    setPreBasePhGateDone(false);
+    setPreBasePh('');
     setFinalMixDone(false);
     setSettleDone(false);
+    setFinalGateDone(false);
+    setFinalEc('');
+    setFinalPh('');
     setExecutionMessage('');
   }, [
     selectedRecipeId,
     volume,
+    directUseVolumeMl,
     allocationMode,
     store.currentMedium,
     store.currentWaterProfile,
@@ -108,18 +120,23 @@ export default function PlannerV3() {
     [selectedRecipe, store.inventory],
   );
 
+  // This UI now implements both mandatory checkpoints, so the validator may
+  // explicitly treat canonical execution gates as integrated.
   const warnings = useMemo(
     () => selectedRecipe
       ? validateRecipeContext(selectedRecipe, store.inventory, {
           medium: store.currentMedium,
           method,
+          canonicalExecutionGatesIntegrated: true,
         })
       : [],
     [selectedRecipe, store.inventory, store.currentMedium, method],
   );
 
+  const isReadyToUse = selectedRecipe?.method === ApplicationMethod.READY_TO_SPRAY;
+
   const toolSet = useMemo(() => {
-    if (!selectedRecipe || selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) {
+    if (!selectedRecipe || isReadyToUse) {
       return allocateToolSet([], PHYSICAL_SYRINGES, allocationMode);
     }
     return allocateToolSet(
@@ -130,10 +147,10 @@ export default function PlannerV3() {
       PHYSICAL_SYRINGES,
       allocationMode,
     );
-  }, [selectedRecipe, executionSteps, volume, allocationMode]);
+  }, [selectedRecipe, isReadyToUse, executionSteps, volume, allocationMode]);
 
   const allocationSignatures = useMemo(() => {
-    if (!selectedRecipe || selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) return [];
+    if (!selectedRecipe || isReadyToUse) return [];
     return ALLOCATION_MODES.map(mode => {
       const result = allocateToolSet(
         executionSteps.map(step => ({
@@ -149,29 +166,54 @@ export default function PlannerV3() {
           .join('|'),
       ).join('||');
     });
-  }, [selectedRecipe, executionSteps, volume]);
+  }, [selectedRecipe, isReadyToUse, executionSteps, volume]);
 
   const modesAreIdentical = allocationSignatures.length > 1
     && new Set(allocationSignatures).size === 1;
   const selectedMode = ALLOCATION_MODES.find(mode => mode.value === allocationMode)!;
 
-  const totalMl = selectedRecipe?.method === ApplicationMethod.READY_TO_SPRAY
-    ? 0
+  const inventoryShortages = useMemo(() => {
+    if (!selectedRecipe) return [];
+    return executionSteps.flatMap(step => {
+      const required = isReadyToUse ? directUseVolumeMl : step.ingredient.concentration * volume;
+      if (required <= step.product.remainingCapacity + 0.005) return [];
+      return [{
+        productId: step.product.id,
+        productName: step.product.name,
+        required,
+        available: step.product.remainingCapacity,
+      }];
+    });
+  }, [selectedRecipe, executionSteps, isReadyToUse, directUseVolumeMl, volume]);
+
+  const totalMl = isReadyToUse
+    ? directUseVolumeMl
     : executionSteps.reduce((sum, step) => sum + step.ingredient.concentration * volume, 0);
+
+  const directUseQuantityMissing = Boolean(isReadyToUse) && directUseVolumeMl <= 0;
 
   const canStart = Boolean(selectedRecipe)
     && warnings.length === 0
     && toolSet.complete
-    && executionSteps.length > 0;
+    && executionSteps.length > 0
+    && inventoryShortages.length === 0
+    && !directUseQuantityMissing;
 
   const allStepsCompleted = executionSteps.length > 0
     && completedSteps.length === executionSteps.length;
 
-  const requiresFinalMix = selectedRecipe?.method !== ApplicationMethod.READY_TO_SPRAY;
+  const requiresFinalMix = Boolean(selectedRecipe) && !isReadyToUse;
+  const hasSilicon = selectedRecipe?.method === ApplicationMethod.ROOT_FEED
+    && executionSteps.some(step => step.product.mixingRole === MixingRole.SILICON);
+  const siliconCompleted = executionSteps
+    .filter(step => step.product.mixingRole === MixingRole.SILICON)
+    .every(step => completedSteps.includes(step.product.id));
+  const preBaseGatePending = Boolean(hasSilicon && siliconCompleted && !preBasePhGateDone);
+
   const readyToFinalize = Boolean(selectedRecipe)
     && executionActive
     && allStepsCompleted
-    && (!requiresFinalMix || (finalMixDone && settleDone));
+    && (!requiresFinalMix || (finalMixDone && settleDone && finalGateDone));
 
   const startTimer = (key: string, seconds: number) => {
     setActiveTimer({
@@ -186,14 +228,19 @@ export default function PlannerV3() {
     if (!canStart) return;
     setCompletedSteps([]);
     setActiveTimer(null);
+    setPreBasePhGateDone(false);
+    setPreBasePh('');
     setFinalMixDone(false);
     setSettleDone(false);
+    setFinalGateDone(false);
+    setFinalEc('');
+    setFinalPh('');
     setExecutionActive(true);
-    setExecutionMessage('Wykonanie aktywne. Wlewaj i mieszaj tylko aktualnie odblokowany krok.');
+    setExecutionMessage('Wykonanie aktywne. Dodawaj i mieszaj tylko aktualnie odblokowany krok.');
   };
 
   const startStepMixing = (productId: string, index: number) => {
-    if (!executionActive || index !== completedSteps.length || activeTimer) return;
+    if (!executionActive || index !== completedSteps.length || activeTimer || preBaseGatePending) return;
     const step = executionSteps[index];
     if (!step || step.product.id !== productId) return;
     const instruction = getMixingInstruction(step.product.mixingRole);
@@ -206,10 +253,20 @@ export default function PlannerV3() {
     if (!activeTimer || activeTimer.key !== key || !activeTimer.finished) return;
     setCompletedSteps(previous => [...previous, productId]);
     setActiveTimer(null);
+    if (executionSteps[index]?.product.mixingRole === MixingRole.SILICON) {
+      setExecutionMessage('Silicon wymieszany. Następny produkt jest zablokowany do wykonania punktu kontrolnego pH.');
+    }
+  };
+
+  const confirmPreBasePhGate = () => {
+    const value = Number(preBasePh);
+    if (!preBaseGatePending || !Number.isFinite(value) || value <= 0 || value > 14) return;
+    setPreBasePhGateDone(true);
+    setExecutionMessage(`Punkt kontrolny pH po Silicon zapisany: ${value.toFixed(2)}. Możesz przejść do następnego preparatu.`);
   };
 
   const startFinalMix = () => {
-    if (!executionActive || !allStepsCompleted || finalMixDone || activeTimer) return;
+    if (!executionActive || !allStepsCompleted || finalMixDone || activeTimer || preBaseGatePending) return;
     startTimer('final', FINAL_MIX.seconds);
   };
 
@@ -217,29 +274,36 @@ export default function PlannerV3() {
     if (!activeTimer || activeTimer.key !== 'final' || !activeTimer.finished) return;
     setFinalMixDone(true);
     startTimer('settle', SETTLE_SECONDS);
-    setExecutionMessage('Finalne mieszanie potwierdzone. Zostaw roztwór w spokoju przed EC/pH.');
+    setExecutionMessage('Mieszanie końcowe potwierdzone. Zostaw roztwór w spokoju przed końcowym pomiarem EC/pH.');
   };
 
   const confirmSettle = () => {
     if (!activeTimer || activeTimer.key !== 'settle' || !activeTimer.finished) return;
     setSettleDone(true);
     setActiveTimer(null);
-    setExecutionMessage('Stabilizacja zakończona. Teraz pomiar EC/pH i ewentualna korekta pH na końcu.');
+    setExecutionMessage('Stabilizacja zakończona. Wykonaj końcowy pomiar EC i pH.');
+  };
+
+  const confirmFinalGate = () => {
+    const ec = Number(finalEc);
+    const ph = Number(finalPh);
+    if (!settleDone || !Number.isFinite(ec) || ec < 0 || ec > 20 || !Number.isFinite(ph) || ph <= 0 || ph > 14) return;
+    setFinalGateDone(true);
+    setExecutionMessage(`Końcowy punkt kontrolny zapisany: EC ${ec.toFixed(2)} mS/cm · pH ${ph.toFixed(2)}. Mieszankę można zakończyć i zapisać.`);
   };
 
   const finalizeExecution = () => {
     if (!selectedRecipe || !readyToFinalize) return;
 
     executionSteps.forEach(step => {
-      if (selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY) return;
-      const amount = step.ingredient.concentration * volume;
+      const amount = isReadyToUse ? directUseVolumeMl : step.ingredient.concentration * volume;
       if (amount > 0) store.deductFromInventory(step.product.id, amount);
     });
 
     store.addHistoryItem({
       id: crypto.randomUUID(),
       date: new Date().toLocaleString(),
-      volume,
+      volume: isReadyToUse ? directUseVolumeMl / 1000 : volume,
       recipeId: selectedRecipe.id,
       method: selectedRecipe.method,
       doses: Object.fromEntries(selectedRecipe.ingredients.map(i => [i.productId, i.concentration])),
@@ -254,8 +318,8 @@ export default function PlannerV3() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-        <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Reality Lock UI v1.2 · Mixing Timer</div>
-        <div className="mt-1 text-sm text-white/55">Wlanie składnika, fizyczne mieszanie z odliczaniem i ręczne potwierdzenie są teraz osobnymi krokami.</div>
+        <div className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">Kontrola bezpieczeństwa ARGUS · timer mieszania</div>
+        <div className="mt-1 text-sm text-white/55">Dodanie preparatu, fizyczne mieszanie, punkt kontrolny i ręczne potwierdzenie są osobnymi krokami. Techniczna nazwa warstwy: Reality Lock.</div>
       </div>
 
       <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
@@ -265,7 +329,7 @@ export default function PlannerV3() {
           <div><strong className="text-white/80">Cel:</strong> pełny obieg bez piany</div>
           <div><strong className="text-white/80">Wir:</strong> nie odsłaniać dna</div>
         </div>
-        <div className="mt-2 text-[10px] leading-relaxed text-white/35">To czasy operacyjne do Twojego procesu, nie deklaracje producenta nawozu. Bambus lub inne mieszadło musi pracować prosto i bez bicia.</div>
+        <div className="mt-2 text-[10px] leading-relaxed text-white/35">To czasy operacyjne do procesu ARGUS, nie deklaracje producenta nawozu. Bambus lub inne mieszadło musi pracować prosto i bez bicia.</div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -285,11 +349,11 @@ export default function PlannerV3() {
           label="Woda"
           value={store.currentWaterProfile}
           onChange={v => store.updateWater(v as WaterType)}
-          hint="Jeśli nie znasz twardości kranówki, zostaw profil nieznany."
+          hint="Jeśli nie znasz parametrów kranówki, zostaw profil nieznany."
         >
           <option value={WaterType.CUSTOM}>Kranowa - nie wiem / własna</option>
-          <option value={WaterType.SOFT}>Kranowa miękka (SOFT)</option>
-          <option value={WaterType.HARD}>Kranowa twarda (HARD)</option>
+          <option value={WaterType.SOFT}>Kranowa miękka</option>
+          <option value={WaterType.HARD}>Kranowa twarda</option>
           <option value={WaterType.RO}>RO / demineralizowana</option>
         </ContextSelect>
 
@@ -304,11 +368,11 @@ export default function PlannerV3() {
           label="Metoda"
           value={method}
           onChange={v => setMethod(v as ApplicationMethod)}
-          hint="Brak receptury oznacza brak zweryfikowanych danych dla danego kontekstu."
+          hint="Brak receptury oznacza brak danych dla danego kontekstu."
         >
           <option value={ApplicationMethod.ROOT_FEED}>Nawożenie korzeniowe</option>
           <option value={ApplicationMethod.FOLIAR}>Oprysk dolistny</option>
-          <option value={ApplicationMethod.READY_TO_SPRAY}>Gotowy oprysk (RTS)</option>
+          <option value={ApplicationMethod.READY_TO_SPRAY}>Gotowy do użycia — bez rozcieńczania</option>
           <option value={ApplicationMethod.SOAK}>Moczenie / namaczanie</option>
           <option value={ApplicationMethod.MEDIA_TREATMENT}>Dodatek do medium / podłoża</option>
         </ContextSelect>
@@ -344,15 +408,15 @@ export default function PlannerV3() {
                           ? 'bg-red-500/15 text-red-300'
                           : 'bg-amber-500/15 text-amber-300'
                     }`}>
-                      {recipe.verificationStatus ?? 'UNVERIFIED'}
+                      {verificationLabel(recipe.verificationStatus)}
                     </span>
                   </div>
-                  {recipe.source && <div className="mt-2 text-[10px] text-white/35">{recipe.source} · {recipe.sourceDate}</div>}
+                  {recipe.source && <div className="mt-2 text-[10px] text-white/35">Źródło: {recipe.source}{recipe.sourceDate ? ` · ${recipe.sourceDate}` : ''}</div>}
                 </button>
               ))}
             </div>
 
-            {selectedRecipe && selectedRecipe.method !== ApplicationMethod.READY_TO_SPRAY && (
+            {selectedRecipe && !isReadyToUse && (
               <div className="mt-6 border-t border-white/10 pt-5">
                 <div className="flex items-center justify-between text-xs font-bold text-white/45">
                   <span>Ilość wody</span><span className="font-mono text-emerald-300">{volume} L</span>
@@ -385,6 +449,25 @@ export default function PlannerV3() {
                 </div>
               </div>
             )}
+
+            {selectedRecipe && isReadyToUse && (
+              <div className="mt-6 border-t border-white/10 pt-5">
+                <label className="block text-xs font-bold text-white/45">Rzeczywiste zużycie gotowego preparatu</label>
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={directUseVolumeMl || ''}
+                    onChange={e => setDirectUseVolumeMl(Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="np. 50"
+                    className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm outline-none focus:border-fuchsia-500"
+                  />
+                  <span className="font-mono text-sm text-fuchsia-300">ml</span>
+                </div>
+                <div className="mt-2 text-[10px] text-white/35">Preparat gotowy do użycia. Nie rozcieńczaj go i nie wkładaj do sekwencji mieszania nawozów.</div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -392,7 +475,7 @@ export default function PlannerV3() {
           <div className="min-h-[520px] rounded-2xl border border-white/10 bg-white/5 p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/55">
-                <Beaker className="h-4 w-4 text-emerald-300" /> Taca robocza
+                <Beaker className="h-4 w-4 text-emerald-300" /> Kolejność dodawania do zbiornika — ARGUS
               </div>
               {executionActive && (
                 <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-300">
@@ -406,7 +489,7 @@ export default function PlannerV3() {
             ) : (
               <div className="mt-5 space-y-4">
                 {selectedRecipe.verificationStatus !== 'VERIFIED' && (
-                  <WarningBox tone="amber">Receptura ma status {selectedRecipe.verificationStatus ?? 'UNVERIFIED'}. Timer nie potwierdza dawek, tylko prowadzi wykonanie.</WarningBox>
+                  <WarningBox tone="amber">Status źródła: {verificationLabel(selectedRecipe.verificationStatus)}. Timer nie potwierdza dawki, tylko prowadzi wykonanie.</WarningBox>
                 )}
                 {selectedRecipe.notes && <WarningBox tone="blue">{selectedRecipe.notes}</WarningBox>}
                 {warnings.map(warning => (
@@ -414,6 +497,14 @@ export default function PlannerV3() {
                     <WarningBox tone="red">{warning.message}</WarningBox>
                   </div>
                 ))}
+                {inventoryShortages.map(shortage => (
+                  <WarningBox key={`stock-${shortage.productId}`} tone="red">
+                    {shortage.productName}: potrzeba {shortage.required.toFixed(2)} ml, dostępne {shortage.available.toFixed(2)} ml.
+                  </WarningBox>
+                ))}
+                {directUseQuantityMissing && (
+                  <WarningBox tone="red">Podaj rzeczywistą ilość gotowego preparatu do użycia.</WarningBox>
+                )}
                 {!toolSet.complete && (
                   <WarningBox tone="red">
                     Brak pełnego zestawu narzędzi. {toolSet.shortages.map(s => `${store.getProduct(s.productId)?.name ?? s.productId}: ${s.remainingMl} ml`).join(' · ')}
@@ -431,95 +522,122 @@ export default function PlannerV3() {
 
                 <div className="space-y-3">
                   {executionSteps.map((step, index) => {
-                    const ready = selectedRecipe.method === ApplicationMethod.READY_TO_SPRAY;
-                    const amount = ready ? 0 : step.ingredient.concentration * volume;
+                    const ready = Boolean(isReadyToUse);
+                    const amount = ready ? directUseVolumeMl : step.ingredient.concentration * volume;
                     const tools = toolSet.assignments[step.product.id] ?? [];
                     const instruction = getMixingInstruction(step.product.mixingRole);
                     const key = `step:${step.product.id}`;
                     const isDone = completedSteps.includes(step.product.id);
-                    const isCurrent = executionActive && index === completedSteps.length;
+                    const isCurrent = executionActive && index === completedSteps.length && !preBaseGatePending;
                     const timer = activeTimer?.key === key ? activeTimer : null;
+                    const isSilicon = step.product.mixingRole === MixingRole.SILICON;
 
                     return (
-                      <div
-                        key={step.product.id}
-                        className={`rounded-xl border p-4 transition ${
-                          isDone
-                            ? 'border-emerald-500/35 bg-emerald-500/10'
-                            : isCurrent
-                              ? 'border-blue-500/40 bg-blue-500/10'
-                              : 'border-white/10 bg-black/50'
-                        }`}
-                      >
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                          <div className="flex flex-1 items-start gap-3">
-                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-black ${
-                              isDone ? 'bg-emerald-500 text-black' : isCurrent ? 'bg-blue-500 text-black' : 'bg-white/10 text-white/50'
-                            }`}>
-                              {isDone ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
-                            </div>
-                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${step.product.color}`}>
-                              {ready ? <Wind className="h-5 w-5 text-black" /> : <Droplet className="h-5 w-5 text-black" />}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-bold">{step.product.name}</div>
-                              {!ready && <div className="mt-1 text-[10px] uppercase tracking-wider text-white/35">{step.ingredient.concentration} ml/L · {amount.toFixed(2)} ml</div>}
-                              <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
-                                <span className="rounded-md bg-white/5 px-2 py-1 text-white/55">{instruction.intensity}</span>
-                                <span className="rounded-md bg-white/5 px-2 py-1 text-white/55">{instruction.seconds}s</span>
-                                <span className="rounded-md bg-white/5 px-2 py-1 text-white/55">{instruction.rpm}</span>
+                      <React.Fragment key={step.product.id}>
+                        <div
+                          className={`rounded-xl border p-4 transition ${
+                            isDone
+                              ? 'border-emerald-500/35 bg-emerald-500/10'
+                              : isCurrent
+                                ? 'border-blue-500/40 bg-blue-500/10'
+                                : 'border-white/10 bg-black/50'
+                          }`}
+                        >
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                            <div className="flex flex-1 items-start gap-3">
+                              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-black ${
+                                isDone ? 'bg-emerald-500 text-black' : isCurrent ? 'bg-blue-500 text-black' : 'bg-white/10 text-white/50'
+                              }`}>
+                                {isDone ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
                               </div>
-                              <div className="mt-2 text-[10px] leading-relaxed text-white/35">{instruction.note}</div>
+                              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${step.product.color}`}>
+                                {ready ? <Wind className="h-5 w-5 text-black" /> : <Droplet className="h-5 w-5 text-black" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-bold">{step.product.name}</div>
+                                {ready
+                                  ? <div className="mt-1 text-[10px] uppercase tracking-wider text-white/35">bez rozcieńczania · {amount.toFixed(2)} ml</div>
+                                  : <div className="mt-1 text-[10px] uppercase tracking-wider text-white/35">{step.ingredient.concentration} ml/L · {amount.toFixed(2)} ml</div>}
+                                <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
+                                  <span className="rounded-md bg-white/5 px-2 py-1 text-white/55">{instruction.intensity}</span>
+                                  <span className="rounded-md bg-white/5 px-2 py-1 text-white/55">{instruction.seconds}s</span>
+                                  <span className="rounded-md bg-white/5 px-2 py-1 text-white/55">{instruction.rpm}</span>
+                                </div>
+                                <div className="mt-2 text-[10px] leading-relaxed text-white/35">{instruction.note}</div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap justify-start gap-2 sm:max-w-[300px] sm:justify-end">
+                              {ready ? (
+                                <span className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-bold text-fuchsia-300">Gotowy do użycia · bez rozcieńczania</span>
+                              ) : tools.length ? tools.map(tool => (
+                                <span key={tool.instanceId} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                                  <Syringe className="h-3.5 w-3.5 text-white/35" />
+                                  <span className="text-white/45">{tool.type}</span>
+                                  <strong className="font-mono text-emerald-300">{tool.amount} ml</strong>
+                                  <span className="text-[9px] text-white/25">{tool.instanceId}</span>
+                                </span>
+                              )) : <span className="text-xs text-white/25">0 ml</span>}
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap justify-start gap-2 sm:max-w-[300px] sm:justify-end">
-                            {ready ? (
-                              <span className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-bold text-fuchsia-300">Bezpośrednia aplikacja</span>
-                            ) : tools.length ? tools.map(tool => (
-                              <span key={tool.instanceId} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">
-                                <Syringe className="h-3.5 w-3.5 text-white/35" />
-                                <span className="text-white/45">{tool.type}</span>
-                                <strong className="font-mono text-emerald-300">{tool.amount} ml</strong>
-                                <span className="text-[9px] text-white/25">{tool.instanceId}</span>
-                              </span>
-                            )) : <span className="text-xs text-white/25">0 ml</span>}
-                          </div>
+                          {isCurrent && !isDone && (
+                            <div className="mt-4 border-t border-white/10 pt-4">
+                              {!timer ? (
+                                <button
+                                  type="button"
+                                  onClick={() => startStepMixing(step.product.id, index)}
+                                  className="w-full rounded-xl bg-blue-500 px-4 py-3 text-sm font-black text-black"
+                                >
+                                  {ready ? 'ZASTOSOWANO → POTWIERDŹ' : instruction.useDrill ? 'DODANO + START MIESZANIA' : 'DODANO + START MIESZANIA RĘCZNEGO'}
+                                </button>
+                              ) : (
+                                <TimerPanel timer={timer} label={ready ? 'Potwierdzenie aplikacji' : `${instruction.intensity} · ${instruction.rpm}`} />
+                              )}
+
+                              {timer?.finished && (
+                                <button
+                                  type="button"
+                                  onClick={() => confirmStep(step.product.id, index)}
+                                  className="mt-3 w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black"
+                                >
+                                  {ready ? 'APLIKACJA OK → DALEJ' : 'MIESZANIE OK → DALEJ'}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        {isCurrent && !isDone && (
-                          <div className="mt-4 border-t border-white/10 pt-4">
-                            {!timer ? (
-                              <button
-                                type="button"
-                                onClick={() => startStepMixing(step.product.id, index)}
-                                className="w-full rounded-xl bg-blue-500 px-4 py-3 text-sm font-black text-black"
-                              >
-                                {ready ? 'ZASTOSOWANO → POTWIERDŹ' : instruction.useDrill ? 'WLANO + START MIESZANIA' : 'WLANO + START MIESZANIA RĘCZNEGO'}
-                              </button>
-                            ) : (
-                              <TimerPanel timer={timer} label={ready ? 'Potwierdzenie aplikacji' : `${instruction.intensity} · ${instruction.rpm}`} />
-                            )}
+                        {executionActive && isSilicon && isDone && !preBasePhGateDone && (
+                          <MeasurementGate
+                            title="Punkt kontrolny pH po Silicon"
+                            description="Zanim dodasz CalMag, bazę lub kolejny koncentrat, wymieszaj Silicon i sprawdź pH. Ten punkt kontrolny jest oddzielony od końcowej korekty pH."
+                          >
+                            <MeasurementInput label="pH" value={preBasePh} onChange={setPreBasePh} placeholder="np. 6.50" />
+                            <button
+                              type="button"
+                              onClick={confirmPreBasePhGate}
+                              disabled={!validPh(preBasePh)}
+                              className={`w-full rounded-xl px-4 py-3 text-sm font-black ${validPh(preBasePh) ? 'bg-cyan-500 text-black' : 'cursor-not-allowed bg-white/10 text-white/25'}`}
+                            >
+                              POMIAR pH WYKONANY → ODBLOKUJ DALEJ
+                            </button>
+                          </MeasurementGate>
+                        )}
 
-                            {timer?.finished && (
-                              <button
-                                type="button"
-                                onClick={() => confirmStep(step.product.id, index)}
-                                className="mt-3 w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black"
-                              >
-                                {ready ? 'APLIKACJA OK → DALEJ' : 'MIESZANIE OK → DALEJ'}
-                              </button>
-                            )}
+                        {executionActive && isSilicon && isDone && preBasePhGateDone && (
+                          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-cyan-200">
+                            Punkt kontrolny po Silicon zaliczony · pH {Number(preBasePh).toFixed(2)}
                           </div>
                         )}
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
 
                 {executionActive && allStepsCompleted && requiresFinalMix && (
                   <div className={`rounded-xl border p-4 ${finalMixDone ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-violet-500/30 bg-violet-500/10'}`}>
-                    <div className="text-xs font-black uppercase tracking-[0.16em] text-violet-200">Finalne mieszanie</div>
+                    <div className="text-xs font-black uppercase tracking-[0.16em] text-violet-200">Mieszanie końcowe</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
                       <span className="rounded-md bg-white/5 px-2 py-1 text-white/65">{FINAL_MIX.intensity}</span>
                       <span className="rounded-md bg-white/5 px-2 py-1 text-white/65">{FINAL_MIX.seconds}s</span>
@@ -530,15 +648,15 @@ export default function PlannerV3() {
                     {!finalMixDone && activeTimer?.key !== 'settle' && (
                       <div className="mt-4">
                         {activeTimer?.key === 'final' ? (
-                          <TimerPanel timer={activeTimer} label="Mieszanie finalne" />
+                          <TimerPanel timer={activeTimer} label="Mieszanie końcowe" />
                         ) : (
                           <button type="button" onClick={startFinalMix} className="w-full rounded-xl bg-violet-500 px-4 py-3 text-sm font-black text-black">
-                            START FINALNEGO MIESZANIA · {FINAL_MIX.seconds}s
+                            START MIESZANIA KOŃCOWEGO · {FINAL_MIX.seconds}s
                           </button>
                         )}
                         {activeTimer?.key === 'final' && activeTimer.finished && (
                           <button type="button" onClick={confirmFinalMix} className="mt-3 w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black">
-                            FINALNE MIESZANIE OK → SPOCZYNEK
+                            MIESZANIE KOŃCOWE OK → SPOCZYNEK
                           </button>
                         )}
                       </div>
@@ -549,21 +667,41 @@ export default function PlannerV3() {
                         <TimerPanel timer={activeTimer} label="Spoczynek przed EC/pH" />
                         {activeTimer.finished && (
                           <button type="button" onClick={confirmSettle} className="mt-3 w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-black">
-                            SPOCZYNEK OK → EC / pH
+                            SPOCZYNEK OK → POMIAR EC / pH
                           </button>
                         )}
                       </div>
                     )}
 
-                    {finalMixDone && settleDone && (
+                    {finalMixDone && settleDone && !finalGateDone && (
+                      <MeasurementGate
+                        title="Końcowy punkt kontrolny EC / pH"
+                        description="Zmierz kompletny, ustabilizowany roztwór. Ewentualna końcowa korekta pH odbywa się dopiero tutaj, po wszystkich preparatach."
+                      >
+                        <div className="grid grid-cols-2 gap-2">
+                          <MeasurementInput label="EC mS/cm" value={finalEc} onChange={setFinalEc} placeholder="np. 1.40" />
+                          <MeasurementInput label="pH" value={finalPh} onChange={setFinalPh} placeholder="np. 6.20" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={confirmFinalGate}
+                          disabled={!validEc(finalEc) || !validPh(finalPh)}
+                          className={`w-full rounded-xl px-4 py-3 text-sm font-black ${validEc(finalEc) && validPh(finalPh) ? 'bg-cyan-500 text-black' : 'cursor-not-allowed bg-white/10 text-white/25'}`}
+                        >
+                          POMIAR EC / pH WYKONANY → ZATWIERDŹ
+                        </button>
+                      </MeasurementGate>
+                    )}
+
+                    {finalGateDone && (
                       <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-200">
-                        Finalny miks i stabilizacja zaliczone. Zmierz EC/pH. Korekta pH jest ostatnią czynnością.
+                        Końcowy punkt kontrolny zaliczony · EC {Number(finalEc).toFixed(2)} mS/cm · pH {Number(finalPh).toFixed(2)}.
                       </div>
                     )}
                   </div>
                 )}
 
-                {selectedRecipe.method !== ApplicationMethod.READY_TO_SPRAY && (
+                {!isReadyToUse && (
                   <div className="rounded-xl border border-white/10 bg-black/35 p-4">
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Fizyczny zestaw</div>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
@@ -579,10 +717,10 @@ export default function PlannerV3() {
 
                 <div className="flex flex-col gap-4 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Suma koncentratów</div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">{isReadyToUse ? 'Zużycie preparatu' : 'Suma koncentratów'}</div>
                     <div className="font-mono text-2xl font-black text-emerald-300">{totalMl.toFixed(2)} ml</div>
                     {selectedRecipe.method === ApplicationMethod.ROOT_FEED && (
-                      <div className="mt-1 text-[10px] text-white/35">Po finalnym mieszaniu i spoczynku: EC/pH. Korekta pH zawsze na końcu.</div>
+                      <div className="mt-1 text-[10px] text-white/35">Po mieszaniu końcowym i spoczynku obowiązkowy punkt kontrolny EC/pH. Końcowa korekta pH jest ostatnią czynnością.</div>
                     )}
                   </div>
 
@@ -616,6 +754,49 @@ export default function PlannerV3() {
         </section>
       </div>
     </div>
+  );
+}
+
+function verificationLabel(status?: string) {
+  if (status === 'VERIFIED') return 'ZWERYFIKOWANE';
+  if (status === 'CONFLICT') return 'KONFLIKT ŹRÓDEŁ';
+  return 'NIEZWERYFIKOWANE ŹRÓDŁOWO';
+}
+
+function validPh(value: string) {
+  const number = Number(value);
+  return value.trim() !== '' && Number.isFinite(number) && number > 0 && number <= 14;
+}
+
+function validEc(value: string) {
+  const number = Number(value);
+  return value.trim() !== '' && Number.isFinite(number) && number >= 0 && number <= 20;
+}
+
+function MeasurementGate({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
+      <div className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">{title}</div>
+      <div className="mt-2 text-xs leading-relaxed text-cyan-100/65">{description}</div>
+      <div className="mt-4 space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function MeasurementInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-white/40">{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+      />
+    </label>
   );
 }
 
