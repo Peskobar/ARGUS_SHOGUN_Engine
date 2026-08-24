@@ -1,4 +1,5 @@
 import { GrowthStage, WaterType } from './types';
+import { normalizeSourceEc } from './numericGuards';
 import {
   ManufacturerProfileSelection,
   getProfileDosePoint,
@@ -52,9 +53,10 @@ export interface DryRunNutritionPlan {
  * prescription until a complete current profile/generator snapshot is frozen.
  */
 export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRunNutritionPlan {
+  const backgroundEc = normalizeSourceEc(context.backgroundEc);
   const profile = resolveManufacturerProfile(context.manufacturerProfile ?? 'AUTO', context.usesLed);
   const waterAdjustment = profile.id === 'TERRA_LED_2024'
-    ? resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType)
+    ? resolveLedTerraWaterAdjustment(backgroundEc, context.waterType)
     : null;
 
   const points = profile.dosePoints.filter(point =>
@@ -84,7 +86,7 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
 
   // Work audit: CalMag is NEEDS_USER_DATA. Never auto-add from EC/profile label alone.
   if (profile.id === 'TERRA_LED_2024') {
-    const calMag = ledCalMagDoseMlPerL(context.backgroundEc, context.waterType);
+    const calMag = ledCalMagDoseMlPerL(backgroundEc, context.waterType);
     if (calMag.dose !== null) {
       doses.push({
         productId: 'calmag',
@@ -105,7 +107,7 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     week: context.week,
     productIds,
     waterType: context.waterType,
-    backgroundEc: context.backgroundEc,
+    backgroundEc,
   });
 
   const abstentionReasons: AbstentionReason[] = [];
@@ -122,17 +124,17 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
       message: 'Manufacturer/context conflicts remain; dry-run may explain them but cannot promote itself to an executable weekly prescription.',
     });
   }
-  if (context.backgroundEc === undefined) {
+  if (backgroundEc === undefined) {
     abstentionReasons.push({
       code: 'WATER_CHEMISTRY_INCOMPLETE',
-      message: 'No live SOURCE_EC is present. A declared HARD/SOFT/RO label is not a measurement.',
+      message: 'No valid live SOURCE_EC is present. A declared HARD/SOFT/RO label is not a measurement.',
       minimumNextMeasurement: 'Measure source EC and pH; retain Ca/Mg/alkalinity as separate chemistry fields.',
     });
   }
 
   const notes = [
     `INDEPENDENT AUDIT: weekly plan = ${WORK_AUDIT_VERDICT.weeklyPlan}; automatic dose = ${WORK_AUDIT_VERDICT.automaticDoseSelection}; automatic execution = ${WORK_AUDIT_VERDICT.automaticExecution}.`,
-    'DRY RUN does not write history, deduct inventory or start Planner 2.2.',
+    'DRY RUN does not write history, deduct inventory or enter the Technik Żywienia preparation/execution workflow.',
     'Displayed ml/L values are evidence-preview points, not an approved adaptive prescription.',
   ];
 
