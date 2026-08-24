@@ -12,6 +12,7 @@ export type ConflictSeverity = 'BLOCK' | 'WARN' | 'INFO';
 export type ConflictCode =
   | 'GROW_BLOOM_TOGETHER'
   | 'START_GROW_OVERLAP'
+  | 'MISSING_BASE_NUTRITION'
   | 'SILICON_PRE_BASE_PH_GATE'
   | 'PK_BASE_PROVENANCE'
   | 'CALMAG_WATER_CONDITIONAL'
@@ -50,6 +51,7 @@ export interface ConflictResolution {
 export function resolveNutritionConflicts(context: ConflictContext): ConflictResolution {
   const findings: ConflictFinding[] = [];
   const has = (id: string) => context.productIds.includes(id);
+  const hasBase = has('shogun-start') || has('samurai-terra-grow') || has('samurai-terra-bloom');
   const ledProfile = context.profile.id === 'TERRA_LED_2024';
   const waterAdjustment = ledProfile
     ? resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType)
@@ -65,6 +67,16 @@ export function resolveNutritionConflicts(context: ConflictContext): ConflictRes
       title: 'Profil producenta nie ma release authority',
       detail: `${context.profile.label}: auditStatus=${context.profile.auditStatus}, snapshotFrozen=${context.profile.snapshotFrozen}, releaseEligible=${context.profile.releaseEligible}.`,
       action: 'WEEKLY PLAN = HOLD do zamrożenia pełnego current snapshotu/generator tuple i source reconciliation.',
+    });
+  }
+
+  if (context.productIds.length > 0 && context.stage !== GrowthStage.FLUSH && !hasBase) {
+    findings.push({
+      code: 'MISSING_BASE_NUTRITION',
+      severity: 'BLOCK',
+      title: 'Brak nawozu bazowego',
+      detail: 'Zwykły plan żywienia korzeniowego zawiera dodatki, ale nie zawiera pełnego źródła bazowego NPK. Dodatki nie mogą po cichu zastąpić bazy.',
+      action: 'ABSTAIN/HOLD. Wskaż zweryfikowaną bazę albo jawnie przejdź do innego, udokumentowanego trybu żywienia.',
     });
   }
 
