@@ -45,6 +45,9 @@ jobs:
       - name: Numeric adversarial smoke
         run: npm run smoke:numeric-adversarial
 
+      - name: Storage poisoning smoke
+        run: npm run smoke:storage-poisoning
+
       - name: Work audit smoke
         run: npm run smoke:work-audit
 
