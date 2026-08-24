@@ -12,6 +12,7 @@
     "smoke:backend": "node --experimental-strip-types scripts/backend-smoke.mjs",
     "smoke:nutrition": "tsx scripts/nutrition-smoke.ts",
     "smoke:nutrition-integrity": "tsx scripts/nutrition-integrity-smoke.ts",
+    "smoke:unified-workflow": "tsx scripts/unified-workflow-smoke.ts",
     "smoke:work-audit": "tsx scripts/work-audit-smoke.ts"
   },
   "dependencies": {
