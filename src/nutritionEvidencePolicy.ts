@@ -1,4 +1,4 @@
-import { normalizeSourceEc } from './numericGuards';
+import { finiteNumber, normalizeRelativeHumidity, normalizeSourceEc } from './numericGuards';
 import { GrowthStage, WaterType } from './types';
 
 export type VerificationDimensionStatus = 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'CONFLICT';
@@ -132,18 +132,23 @@ export function classifyShogunWaterFromMeasuredEc(backgroundEc?: number): WaterT
 
 export function getManufacturerScheduleSignals(environment: FeedingEnvironment): FeedingScheduleProfile[] {
   const signals: FeedingScheduleProfile[] = [];
+  const leafTemperatureC = finiteNumber(environment.leafTemperatureC)
+    ? environment.leafTemperatureC
+    : undefined;
+  const relativeHumidity = normalizeRelativeHumidity(environment.relativeHumidity);
+
   if (
-    environment.leafTemperatureC !== undefined
-    && environment.relativeHumidity !== undefined
-    && environment.leafTemperatureC > 25
-    && environment.relativeHumidity < 50
+    leafTemperatureC !== undefined
+    && relativeHumidity !== undefined
+    && leafTemperatureC > 25
+    && relativeHumidity < 50
   ) signals.push('LIGHT');
 
   if (
-    environment.leafTemperatureC !== undefined
-    && environment.relativeHumidity !== undefined
-    && environment.leafTemperatureC < 25
-    && environment.relativeHumidity > 50
+    leafTemperatureC !== undefined
+    && relativeHumidity !== undefined
+    && leafTemperatureC < 25
+    && relativeHumidity > 50
   ) signals.push('STANDARD');
 
   if (environment.usesLed === true || environment.closedLoopActiveCoolingWithCo2 === true) signals.push('HEAVY');
