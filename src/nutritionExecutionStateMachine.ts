@@ -40,12 +40,28 @@ const MIXABLE_ROLES = new Set<MixingRole>([
 
 /**
  * Builds the physical execution workflow from trusted product role metadata.
- * Input array order is intentionally ignored.
+ * Input array order is intentionally ignored. Unknown roles and duplicate product
+ * identities are rejected instead of disappearing silently from the workflow.
  */
 export function buildNutritionExecutionWorkflow(products: readonly Product[]): readonly NutritionExecutionStep[] {
+  const seenIds = new Set<string>();
+  for (const product of products) {
+    if (seenIds.has(product.id)) {
+      throw new Error(`DUPLICATE_EXECUTION_PRODUCT: ${product.id}`);
+    }
+    seenIds.add(product.id);
+
+    if (!product.mixingRole) {
+      throw new Error(`MISSING_MIXING_ROLE: ${product.id}`);
+    }
+    if (product.mixingRole !== MixingRole.READY_TO_USE && !MIXABLE_ROLES.has(product.mixingRole)) {
+      throw new Error(`UNSUPPORTED_EXECUTION_ROLE: ${product.id}:${product.mixingRole}`);
+    }
+  }
+
   const readyToUse = products.filter(product => product.mixingRole === MixingRole.READY_TO_USE);
   const mixable = products
-    .filter(product => product.mixingRole && MIXABLE_ROLES.has(product.mixingRole))
+    .filter(product => product.mixingRole !== MixingRole.READY_TO_USE)
     .slice()
     .sort(compareProductsByCanonicalExecution);
 
@@ -68,10 +84,17 @@ export function buildNutritionExecutionWorkflow(products: readonly Product[]): r
     { id: 'water', kind: 'WATER', label: 'Woda' },
   ];
 
-  for (const product of mixable) {
+  for (let index = 0; index < mixable.length; index += 1) {
+    const product = mixable[index];
+    const nextProduct = mixable[index + 1];
     steps.push(productStep(product));
 
-    if (product.mixingRole === MixingRole.SILICON) {
+    // If future trusted registries contain more than one Silicon product, the
+    // dilution/pH gate is inserted once after the final Silicon step.
+    if (
+      product.mixingRole === MixingRole.SILICON
+      && nextProduct?.mixingRole !== MixingRole.SILICON
+    ) {
       steps.push({
         id: 'mix:silicon-dilution',
         kind: 'MIX_DILUTION',
