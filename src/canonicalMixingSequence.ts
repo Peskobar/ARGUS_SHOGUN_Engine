@@ -1,4 +1,6 @@
-import { MixingRole, type Product } from './types.ts';
+import type { Product } from './types.ts';
+
+type MixingRoleValue = NonNullable<Product['mixingRole']>;
 
 /**
  * Single domain authority for physical nutrient-mixing order.
@@ -7,19 +9,21 @@ import { MixingRole, type Product } from './types.ts';
  * - UI/display sorting is not execution authority.
  * - Persisted/custom recipe order is not execution authority.
  * - Both Technik Żywienia and Planner must derive physical order from this module.
+ * - This module intentionally has no runtime dependency on TypeScript enums so it
+ *   can be consumed by native Node smoke tests as well as Vite/tsx.
  */
-export const CANONICAL_MIXING_ROLE_ORDER: Readonly<Record<MixingRole, number>> = Object.freeze({
-  [MixingRole.SILICON]: 100,
-  [MixingRole.CALMAG]: 300,
-  [MixingRole.BASE]: 400,
-  [MixingRole.ROOTS]: 500,
-  [MixingRole.ENZYME]: 600,
-  [MixingRole.BOOSTER]: 700,
-  [MixingRole.PK]: 800,
-  [MixingRole.BIOLOGICAL]: 850,
-  [MixingRole.OTHER]: 900,
-  [MixingRole.PH_ADJUSTER]: 1000,
-  [MixingRole.READY_TO_USE]: 1100,
+export const CANONICAL_MIXING_ROLE_ORDER: Readonly<Record<MixingRoleValue, number>> = Object.freeze({
+  SILICON: 100,
+  CALMAG: 300,
+  BASE: 400,
+  ROOTS: 500,
+  ENZYME: 600,
+  BOOSTER: 700,
+  PK: 800,
+  BIOLOGICAL: 850,
+  OTHER: 900,
+  PH_ADJUSTER: 1000,
+  READY_TO_USE: 1100,
 });
 
 export type CanonicalProcessStep =
@@ -62,9 +66,9 @@ export const CANONICAL_PROCESS_MODEL: readonly CanonicalProcessStep[] = Object.f
   'COMPLETE',
 ]);
 
-export function canonicalRoleOrder(role?: MixingRole): number {
-  if (!role) return CANONICAL_MIXING_ROLE_ORDER[MixingRole.OTHER];
-  return CANONICAL_MIXING_ROLE_ORDER[role] ?? CANONICAL_MIXING_ROLE_ORDER[MixingRole.OTHER];
+export function canonicalRoleOrder(role?: Product['mixingRole']): number {
+  if (!role) return CANONICAL_MIXING_ROLE_ORDER.OTHER;
+  return CANONICAL_MIXING_ROLE_ORDER[role] ?? CANONICAL_MIXING_ROLE_ORDER.OTHER;
 }
 
 export function canonicalProductOrder(product: Pick<Product, 'mixingRole'>): number {
