@@ -1,8 +1,8 @@
+import { canonicalRoleOrder } from './canonicalMixingSequence';
 import type {
   ApplicationMethod,
   GrowthStage,
   Medium,
-  MixingRole,
   Product,
   Recipe,
   RecipeIngredient,
@@ -19,7 +19,12 @@ export interface RecipeContext {
 export interface RecipeExecutionStep {
   ingredient: RecipeIngredient;
   product: Product;
+  /** Legacy compatibility alias for executionOrder. */
   order: number;
+  /** Authoring/presentation metadata only. Never physical execution authority. */
+  recipeOrder?: number;
+  /** Derived exclusively from canonical domain chemistry rules. */
+  executionOrder: number;
 }
 
 export interface RecipeValidationWarning {
@@ -31,20 +36,6 @@ export interface RecipeValidationWarning {
   productId: string;
   message: string;
 }
-
-const ROLE_ORDER: Record<string, number> = {
-  SILICON: 100,
-  CALMAG: 200,
-  BASE: 300,
-  ROOTS: 400,
-  ENZYME: 500,
-  BOOSTER: 600,
-  PK: 700,
-  BIOLOGICAL: 800,
-  READY_TO_USE: 900,
-  OTHER: 950,
-  PH_ADJUSTER: 1000,
-};
 
 /**
  * Strict context filter. READY_TO_SPRAY is not a wildcard and therefore cannot
@@ -77,14 +68,17 @@ export function buildExecutionSteps(
       const product = productMap.get(ingredient.productId);
       if (!product) return null;
 
+      const executionOrder = canonicalRoleOrder(product.mixingRole) + index / 1000;
       return {
         ingredient,
         product,
-        order: ingredient.mixOrder ?? roleOrder(product.mixingRole) + index / 1000,
+        recipeOrder: ingredient.mixOrder,
+        executionOrder,
+        order: executionOrder,
       };
     })
     .filter((step): step is RecipeExecutionStep => Boolean(step))
-    .sort((a, b) => a.order - b.order || a.product.name.localeCompare(b.product.name));
+    .sort((a, b) => a.executionOrder - b.executionOrder || a.product.name.localeCompare(b.product.name));
 }
 
 export function validateRecipeContext(
@@ -135,9 +129,4 @@ export function validateRecipeContext(
   }
 
   return warnings;
-}
-
-function roleOrder(role?: MixingRole): number {
-  if (!role) return ROLE_ORDER.OTHER;
-  return ROLE_ORDER[String(role)] ?? ROLE_ORDER.OTHER;
 }
