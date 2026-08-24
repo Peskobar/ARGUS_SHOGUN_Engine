@@ -31,8 +31,16 @@ export interface RecipeExecutionStep {
   order: number;
   /** Authoring/presentation metadata only. Never physical execution authority. */
   recipeOrder?: number;
+  /** Original source/manufacturer row order. Never execution authority. */
+  sourceOrder?: number;
   /** Derived exclusively from canonical domain chemistry rules. */
   executionOrder: number;
+}
+
+export interface RecipeSourceStep {
+  ingredient: RecipeIngredient;
+  product: Product;
+  sourceOrder: number;
 }
 
 export interface RecipeValidationWarning {
@@ -69,6 +77,35 @@ export function filterRecipes(recipes: Recipe[], context: RecipeContext): Recipe
   });
 }
 
+/**
+ * Source/provenance projection. The array position is a backwards-compatible
+ * fallback for older recipes that predate sourceOrder. No chemistry sorting is
+ * allowed here.
+ */
+export function buildManufacturerSourceSteps(
+  recipe: Recipe,
+  products: Product[],
+): RecipeSourceStep[] {
+  const productMap = new Map(products.map(product => [product.id, product]));
+
+  return recipe.ingredients
+    .map((ingredient, sourceIndex): RecipeSourceStep | null => {
+      const product = productMap.get(ingredient.productId);
+      if (!product) return null;
+      return {
+        ingredient,
+        product,
+        sourceOrder: ingredient.sourceOrder ?? (sourceIndex + 1) * 100,
+      };
+    })
+    .filter((step): step is RecipeSourceStep => step !== null)
+    .sort((a, b) => a.sourceOrder - b.sourceOrder);
+}
+
+/**
+ * Physical execution projection. sourceOrder and manual mixOrder are explicitly
+ * non-authoritative; canonical chemistry is the only physical-order authority.
+ */
 export function buildExecutionSteps(
   recipe: Recipe,
   products: Product[],
@@ -85,6 +122,7 @@ export function buildExecutionSteps(
         ingredient,
         product,
         recipeOrder: ingredient.mixOrder,
+        sourceOrder: ingredient.sourceOrder,
         executionOrder,
         order: executionOrder,
       };
@@ -146,7 +184,7 @@ export function validateRecipeContext(
       warnings.push({
         code: 'READY_TO_SPRAY_PRODUCT_MISMATCH',
         productId: product.id,
-        message: `${product.name} nie jest produktem READY_TO_USE.`,
+        message: `${product.name} nie jest produktem gotowym do użycia bez rozcieńczania.`,
       });
     }
   }
@@ -178,7 +216,7 @@ export function validateRecipeContext(
     warnings.push({
       code: 'PRE_BASE_PH_GATE_NOT_INTEGRATED',
       productId: 'silicon',
-      message: 'Ta powierzchnia wykonawcza nie ma jeszcze podpiętej obowiązkowej bramki PRE_BASE_PH_GATE po Silicon. Wykonanie pozostaje HOLD do integracji canonical state machine.',
+      message: 'Ta powierzchnia wykonawcza nie ma jeszcze podpiętego obowiązkowego punktu kontrolnego pH po Silicon. Wykonanie pozostaje wstrzymane do integracji kanonicznej maszyny stanów.',
     });
   }
 
