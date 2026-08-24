@@ -1,4 +1,4 @@
-import { MixingRole, type Product } from './types';
+import { MixingRole, type Product } from './types.ts';
 
 /**
  * Single domain authority for physical nutrient-mixing order.
