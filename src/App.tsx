@@ -11,7 +11,7 @@ export default function App() {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-black tracking-tight">ARGUS SHOGUN Engine</div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/35">Technik Żywienia · Evidence + Preparation</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-white/35">Technik Żywienia · źródło → decyzja → wykonanie</div>
           </div>
           <div className="grid grid-cols-2 rounded-xl bg-white/5 p-1">
             <button
