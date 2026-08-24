@@ -2,14 +2,14 @@ export enum Medium {
   TERRA = 'TERRA',
   COCO = 'COCO',
   HYDRO = 'HYDRO',
-  CUSTOM = 'CUSTOM'
+  CUSTOM = 'CUSTOM',
 }
 
 export enum WaterType {
   SOFT = 'SOFT',
   HARD = 'HARD',
   RO = 'RO',
-  CUSTOM = 'CUSTOM'
+  CUSTOM = 'CUSTOM',
 }
 
 export enum ApplicationMethod {
@@ -17,7 +17,7 @@ export enum ApplicationMethod {
   FOLIAR = 'FOLIAR',
   READY_TO_SPRAY = 'READY_TO_SPRAY',
   SOAK = 'SOAK',
-  MEDIA_TREATMENT = 'MEDIA_TREATMENT'
+  MEDIA_TREATMENT = 'MEDIA_TREATMENT',
 }
 
 export enum GrowthStage {
@@ -25,7 +25,7 @@ export enum GrowthStage {
   VEG = 'VEG',
   BLOOM = 'BLOOM',
   FLUSH = 'FLUSH',
-  ALL = 'ALL'
+  ALL = 'ALL',
 }
 
 export enum MixingRole {
@@ -39,19 +39,23 @@ export enum MixingRole {
   BIOLOGICAL = 'BIOLOGICAL',
   READY_TO_USE = 'READY_TO_USE',
   OTHER = 'OTHER',
-  PH_ADJUSTER = 'PH_ADJUSTER'
+  PH_ADJUSTER = 'PH_ADJUSTER',
 }
 
 export type RecipeVerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'CONFLICT';
+export type RecipeExecutionPolicy = 'SIMULATION_ONLY' | 'PHYSICAL_ALLOWED';
 export type AllocationMode = 'PRECISION' | 'SPEED' | 'MIN_TOOLS';
+export type ExecutionVolumeUnit = 'L' | 'ml';
+export type ExecutionLifecycleStatus = 'PROPOSED' | 'IN_PROGRESS' | 'EXECUTED' | 'ABORTED';
+export type ExecutionApprovalState = 'SIMULATION_ONLY' | 'VERIFIED_RECIPE';
 
 export interface Product {
   id: string;
   name: string;
   brand: string;
   color: string;
-  initialCapacity: number; // ml
-  remainingCapacity: number; // ml
+  initialCapacity: number;
+  remainingCapacity: number;
   unit: string;
   foliarAllowed: boolean;
   compatibleMedia: Medium[];
@@ -61,7 +65,9 @@ export interface Product {
 
 export interface RecipeIngredient {
   productId: string;
-  concentration: number; // ml/L, 0 if READY_TO_SPRAY
+  /** Liquid engine concentration. Non-liquid products must use a dedicated future dosing engine. */
+  concentration: number;
+  /** Optional explicit operator order. Safe-sequence validation still has final authority. */
   mixOrder?: number;
 }
 
@@ -73,10 +79,15 @@ export interface Recipe {
   stage: GrowthStage;
   ingredients: RecipeIngredient[];
   waterProfiles?: WaterType[];
+  /** Inclusive week window within the selected growth stage. Omitted means all weeks. */
+  weekStart?: number;
+  weekEnd?: number;
   source?: string;
   sourceDate?: string;
   sourceUrl?: string;
+  sourceVersion?: string;
   verificationStatus?: RecipeVerificationStatus;
+  executionPolicy?: RecipeExecutionPolicy;
   isFactory: boolean;
   notes?: string;
 }
@@ -90,12 +101,41 @@ export interface SyringeType {
   precisionStep?: number;
 }
 
+export interface ToolAuditItem {
+  productId: string;
+  instanceId: string;
+  label: string;
+  amountMl: number;
+  precisionStep: number;
+}
+
+export interface ExecutionMeasurements {
+  preBasePh?: number;
+  finalEc?: number;
+  finalPh?: number;
+}
+
 export interface HistoryItem {
   id: string;
   date: string;
   volume: number;
+  volumeUnit?: ExecutionVolumeUnit;
   recipeId?: string;
   method: ApplicationMethod;
   doses: Record<string, number>;
   totalMl: number;
+  stage?: GrowthStage;
+  week?: number;
+  medium?: Medium;
+  waterProfile?: WaterType;
+  recipeVerificationStatus?: RecipeVerificationStatus;
+  recipeExecutionPolicy?: RecipeExecutionPolicy;
+  recipeSource?: string;
+  recipeSourceUrl?: string;
+  recipeSourceVersion?: string;
+  measurements?: ExecutionMeasurements;
+  tools?: ToolAuditItem[];
+  confirmedProtocolStepIds?: string[];
+  lifecycleStatus?: ExecutionLifecycleStatus;
+  approvalState?: ExecutionApprovalState;
 }
