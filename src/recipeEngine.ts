@@ -32,7 +32,11 @@ export interface RecipeValidationWarning {
     | 'PRODUCT_NOT_FOUND'
     | 'FOLIAR_NOT_ALLOWED'
     | 'READY_TO_SPRAY_PRODUCT_MISMATCH'
-    | 'MEDIUM_MISMATCH';
+    | 'MEDIUM_MISMATCH'
+    | 'MISSING_MIXING_ROLE'
+    | 'MISSING_BASE_NUTRITION'
+    | 'MULTIPLE_BASE_PRODUCTS'
+    | 'PRE_BASE_PH_GATE_NOT_INTEGRATED';
   productId: string;
   message: string;
 }
@@ -88,6 +92,7 @@ export function validateRecipeContext(
 ): RecipeValidationWarning[] {
   const productMap = new Map(products.map(product => [product.id, product]));
   const warnings: RecipeValidationWarning[] = [];
+  const resolvedProducts: Product[] = [];
 
   for (const ingredient of recipe.ingredients) {
     const product = productMap.get(ingredient.productId);
@@ -100,11 +105,21 @@ export function validateRecipeContext(
       continue;
     }
 
+    resolvedProducts.push(product);
+
     if (!product.compatibleMedia.includes(context.medium)) {
       warnings.push({
         code: 'MEDIUM_MISMATCH',
         productId: product.id,
         message: `${product.name} nie jest oznaczony jako zgodny z medium ${context.medium}.`,
+      });
+    }
+
+    if (!product.mixingRole && String(context.method) !== 'READY_TO_SPRAY') {
+      warnings.push({
+        code: 'MISSING_MIXING_ROLE',
+        productId: product.id,
+        message: `${product.name} nie ma zaufanej roli mieszania. Fizyczne wykonanie pozostaje HOLD do przypisania zweryfikowanej roli domenowej.`,
       });
     }
 
@@ -126,6 +141,33 @@ export function validateRecipeContext(
         message: `${product.name} nie jest produktem READY_TO_USE.`,
       });
     }
+  }
+
+  if (String(context.method) === 'ROOT_FEED' && String(recipe.stage) !== 'FLUSH') {
+    const bases = resolvedProducts.filter(product => String(product.mixingRole) === 'BASE');
+    if (resolvedProducts.length > 0 && bases.length === 0) {
+      warnings.push({
+        code: 'MISSING_BASE_NUTRITION',
+        productId: '__recipe__',
+        message: 'Receptura korzeniowa zawiera dodatki bez zweryfikowanej bazy. Dodatki nie mogą po cichu zastąpić pełnego żywienia bazowego.',
+      });
+    }
+    if (bases.length > 1) {
+      warnings.push({
+        code: 'MULTIPLE_BASE_PRODUCTS',
+        productId: '__recipe__',
+        message: `Receptura zawiera wiele produktów bazowych (${bases.map(product => product.name).join(', ')}). Fizyczne wykonanie pozostaje HOLD do rozstrzygnięcia konfliktu.`,
+      });
+    }
+  }
+
+  const containsSilicon = resolvedProducts.some(product => String(product.mixingRole) === 'SILICON');
+  if (String(context.method) === 'ROOT_FEED' && containsSilicon) {
+    warnings.push({
+      code: 'PRE_BASE_PH_GATE_NOT_INTEGRATED',
+      productId: 'silicon',
+      message: 'PlannerV3 nie ma jeszcze podpiętej obowiązkowej bramki PRE_BASE_PH_GATE po Silicon. Wykonanie tej receptury pozostaje HOLD na branchu hardeningowym do integracji canonical state machine.',
+    });
   }
 
   return warnings;
