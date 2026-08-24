@@ -16,6 +16,14 @@ export interface RecipeContext {
   waterType?: WaterType;
 }
 
+export interface RecipeExecutionValidationContext extends Pick<RecipeContext, 'medium' | 'method'> {
+  /**
+   * True only for an execution surface that actually consumes the canonical
+   * execution state machine including PRE_BASE_PH_GATE and FINAL_EC_PH_GATE.
+   */
+  canonicalExecutionGatesIntegrated?: boolean;
+}
+
 export interface RecipeExecutionStep {
   ingredient: RecipeIngredient;
   product: Product;
@@ -88,7 +96,7 @@ export function buildExecutionSteps(
 export function validateRecipeContext(
   recipe: Recipe,
   products: Product[],
-  context: Pick<RecipeContext, 'medium' | 'method'>,
+  context: RecipeExecutionValidationContext,
 ): RecipeValidationWarning[] {
   const productMap = new Map(products.map(product => [product.id, product]));
   const warnings: RecipeValidationWarning[] = [];
@@ -162,11 +170,15 @@ export function validateRecipeContext(
   }
 
   const containsSilicon = resolvedProducts.some(product => String(product.mixingRole) === 'SILICON');
-  if (String(context.method) === 'ROOT_FEED' && containsSilicon) {
+  if (
+    String(context.method) === 'ROOT_FEED'
+    && containsSilicon
+    && context.canonicalExecutionGatesIntegrated !== true
+  ) {
     warnings.push({
       code: 'PRE_BASE_PH_GATE_NOT_INTEGRATED',
       productId: 'silicon',
-      message: 'PlannerV3 nie ma jeszcze podpiętej obowiązkowej bramki PRE_BASE_PH_GATE po Silicon. Wykonanie tej receptury pozostaje HOLD na branchu hardeningowym do integracji canonical state machine.',
+      message: 'Ta powierzchnia wykonawcza nie ma jeszcze podpiętej obowiązkowej bramki PRE_BASE_PH_GATE po Silicon. Wykonanie pozostaje HOLD do integracji canonical state machine.',
     });
   }
 
