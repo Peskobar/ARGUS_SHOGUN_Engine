@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { SHOGUN_PRODUCTS } from '../src/data';
+import { buildDryRunNutritionPlan } from '../src/dryRunNutritionPlan';
 import { buildExecutionSteps, buildManufacturerSourceSteps } from '../src/recipeEngine';
 import { buildWeeklyNutritionPlan } from '../src/nutritionTechnician';
 import { ApplicationMethod, GrowthStage, Medium, WaterType } from '../src/types';
@@ -40,6 +41,29 @@ assert.ok(
 assert.ok(growIndexSource < rootsIndexSource, 'manufacturer/source view must keep Terra Grow before Katana Roots');
 assert.ok(rootsIndexSource < zenzymIndexSource, 'manufacturer/source view must keep Katana Roots before Zenzym');
 assert.ok(zenzymIndexSource < siliconIndexSource, 'manufacturer/source view must keep Zenzym before Silicon');
+
+const dryRun = buildDryRunNutritionPlan({
+  stage: GrowthStage.VEG,
+  week: 1,
+  waterType: WaterType.CUSTOM,
+  backgroundEc: 0.4,
+  usesLed: true,
+});
+assert.deepEqual(
+  dryRun.manufacturerDoses.map(dose => dose.productId),
+  manufacturerOrder,
+  'dry-run source projection must reuse the same manufacturer/source order',
+);
+assert.deepEqual(
+  dryRun.executionDoses.map(dose => dose.productId),
+  executionOrder,
+  'dry-run execution projection must reuse the same canonical ARGUS order',
+);
+assert.deepEqual(
+  dryRun.doses.map(dose => dose.productId),
+  executionOrder,
+  'legacy dry-run doses alias must not create a third list order',
+);
 
 const candidateRecipe = {
   id: 'technician-planner-parity',
