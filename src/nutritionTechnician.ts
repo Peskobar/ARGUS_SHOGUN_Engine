@@ -1,5 +1,6 @@
 import { canonicalProductOrder } from './canonicalMixingSequence';
 import { SHOGUN_PRODUCTS } from './data';
+import { compareByProfileManufacturerSource } from './manufacturerOrder';
 import { normalizeSourceEc } from './numericGuards';
 import { GrowthStage, WaterType } from './types';
 import {
@@ -77,6 +78,11 @@ export interface WeeklyNutritionPlan {
   scheduleProfileResolved: boolean;
   applicationProtocols: ApplicationProtocolEvidence[];
   waterNotes: string[];
+  /** Exact source/table presentation order. Never use as physical mixing order. */
+  manufacturerProducts: ProductDecision[];
+  /** Canonical ARGUS physical order. Never present this as the manufacturer's row order. */
+  executionProducts: ProductDecision[];
+  /** Backwards-compatible UI alias. It intentionally means manufacturerProducts. */
   products: ProductDecision[];
   conflicts: ConflictFinding[];
   systemWarnings: string[];
@@ -313,22 +319,28 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   }
 
   if (!scheduleProfileResolved) {
-    systemWarnings.push(`Sygnał kalkulatora Light/Standard/Heavy: ${scheduleSignals.join(' + ')}. To osobny wymiar od wersjonowanego feedchartu LED i nie przelicza dawki automatycznie.`);
+    systemWarnings.push(`Sygnał kalkulatora Light/Standard/Heavy: ${scheduleSignals.join(' + ')}. To osobny wymiar od wersjonowanej tabeli nawożenia LED i nie przelicza dawki automatycznie.`);
   }
   if (scheduleSignals.length > 1) systemWarnings.push('Warunki dają więcej niż jeden sygnał Light/Standard/Heavy. To konflikt kontekstu, nie powód do wyboru mocniejszej dawki.');
   if (context.medium !== 'TERRA_SOIL_PERLITE') systemWarnings.push('Evidence Matrix v1 jest zatwierdzona wyłącznie dla kontekstu TERRA/SOIL + perlit.');
 
-  const products = ALL_PRODUCT_EVIDENCE
+  const activeProducts = ALL_PRODUCT_EVIDENCE
     .map(entry => evaluateProductDecision(entry.productId, safeContext, 'BASELINE'))
     .filter((decision): decision is ProductDecision => Boolean(decision))
-    .filter(decision => decision.doseWindows.length > 0)
+    .filter(decision => decision.doseWindows.length > 0);
+
+  // Two independent views over the same active products. This is the bug fix:
+  // manufacturer source order must never be derived from physical mixing roles.
+  const manufacturerProducts = [...activeProducts]
+    .sort((a, b) => compareByProfileManufacturerSource(profile, a, b));
+  const executionProducts = [...activeProducts]
     .sort(compareProductDecisionsByCanonicalExecution);
 
   const conflictResolution = resolveNutritionConflicts({
     profile,
     stage: context.stage,
     week: context.week,
-    productIds: products.map(product => product.productId),
+    productIds: activeProducts.map(product => product.productId),
     waterType: context.waterType,
     backgroundEc,
   });
@@ -351,7 +363,9 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     scheduleProfileResolved,
     applicationProtocols,
     waterNotes,
-    products,
+    manufacturerProducts,
+    executionProducts,
+    products: manufacturerProducts,
     conflicts: conflictResolution.findings,
     systemWarnings,
   };

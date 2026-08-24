@@ -49,7 +49,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
     initialCapacity: 250,
     remainingCapacity: 250,
     unit: 'ml',
-    foliarAllowed: true, // Manufacturer says can be used as foliar for stressed plants
+    foliarAllowed: true,
     compatibleMedia: [Medium.TERRA, Medium.COCO, Medium.HYDRO],
     type: 'ADDITIVE'
   },
@@ -88,7 +88,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
     initialCapacity: 1000,
     remainingCapacity: 1000,
     unit: 'ml',
-    foliarAllowed: true, // Has foliar recipe
+    foliarAllowed: true,
     compatibleMedia: [Medium.TERRA, Medium.COCO, Medium.HYDRO],
     type: 'ADDITIVE'
   },
@@ -101,7 +101,7 @@ export const SHOGUN_PRODUCTS: Product[] = [
     initialCapacity: 1000,
     remainingCapacity: 1000,
     unit: 'ml',
-    foliarAllowed: true, // Has specific foliar application
+    foliarAllowed: true,
     compatibleMedia: [Medium.TERRA, Medium.COCO, Medium.HYDRO],
     type: 'ADDITIVE'
   },
@@ -155,7 +155,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.VEG,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Feedchart',
+    source: 'SHOGUN — tabela nawożenia producenta',
     sourceDate: '2025-01-01',
     ingredients: [
       { productId: 'samurai-terra-grow', concentration: 2.0 },
@@ -172,7 +172,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.BLOOM,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Feedchart',
+    source: 'SHOGUN — tabela nawożenia producenta',
     sourceDate: '2025-01-01',
     ingredients: [
       { productId: 'samurai-terra-bloom', concentration: 3.0 },
@@ -190,7 +190,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.BLOOM,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Feedchart',
+    source: 'SHOGUN — tabela nawożenia producenta',
     sourceDate: '2025-01-01',
     ingredients: [
       { productId: 'samurai-terra-bloom', concentration: 3.0 },
@@ -209,7 +209,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.ALL,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Product Page',
+    source: 'SHOGUN — strona produktu producenta',
     sourceDate: '2025-01-01',
     notes: 'Stosować co 14 dni od początku kwitnienia. NIE ROZCIEŃCZAĆ.',
     ingredients: [
@@ -224,7 +224,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.ALL,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Product Page',
+    source: 'SHOGUN — strona produktu producenta',
     sourceDate: '2025-01-01',
     notes: 'Stosować na liście w przypadku niedoborów, max co 7 dni.',
     ingredients: [
@@ -239,7 +239,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.BLOOM,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Product Page',
+    source: 'SHOGUN — strona produktu producenta',
     sourceDate: '2025-01-01',
     notes: 'Oprysk od początku formowania kwiatów do połowy kwitnienia.',
     ingredients: [
@@ -254,7 +254,7 @@ export const FACTORY_RECIPES: Recipe[] = [
     stage: GrowthStage.VEG,
     isFactory: true,
     verificationStatus: 'UNVERIFIED',
-    source: 'SHOGUN Technical Docs',
+    source: 'SHOGUN — dokumentacja techniczna producenta',
     sourceDate: '2025-01-01',
     notes: 'Tylko dla zestresowanych lub ukorzeniających się klonów.',
     ingredients: [
@@ -262,6 +262,15 @@ export const FACTORY_RECIPES: Recipe[] = [
     ]
   }
 ];
+
+// Freeze the current imported array order as explicit provenance metadata.
+// Future UI sorting may change freely without erasing what the source said.
+for (const recipe of FACTORY_RECIPES) {
+  recipe.ingredients = recipe.ingredients.map((ingredient, index) => ({
+    ...ingredient,
+    sourceOrder: ingredient.sourceOrder ?? (index + 1) * 100,
+  }));
+}
 
 export const PHYSICAL_SYRINGES: SyringeType[] = [
   { id: 's20', capacity: 20, count: 5, label: '20ml', type: 'SYRINGE' },

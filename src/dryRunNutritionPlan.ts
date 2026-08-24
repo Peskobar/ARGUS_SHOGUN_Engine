@@ -1,3 +1,6 @@
+import { canonicalProductOrder } from './canonicalMixingSequence';
+import { SHOGUN_PRODUCTS } from './data';
+import { compareByProfileManufacturerSource } from './manufacturerOrder';
 import { GrowthStage, WaterType } from './types';
 import { normalizeSourceEc } from './numericGuards';
 import {
@@ -37,6 +40,11 @@ export interface DryRunNutritionPlan {
   profileLabel: string;
   stage: GrowthStage;
   week: number;
+  /** Manufacturer/source table order, for provenance display only. */
+  manufacturerDoses: DryRunDose[];
+  /** Canonical ARGUS order, for operational/preparation display. */
+  executionDoses: DryRunDose[];
+  /** Backwards-compatible alias. It intentionally means executionDoses. */
   doses: DryRunDose[];
   conflicts: ConflictFinding[];
   blockers: ConflictFinding[];
@@ -46,6 +54,16 @@ export interface DryRunNutritionPlan {
   readyForExecutionCandidate: false;
   autoExecutionAllowed: false;
   notes: string[];
+}
+
+const PRODUCT_BY_ID = new Map(SHOGUN_PRODUCTS.map(product => [product.id, product]));
+
+function compareDryRunByCanonicalExecution(a: DryRunDose, b: DryRunDose) {
+  const productA = PRODUCT_BY_ID.get(a.productId);
+  const productB = PRODUCT_BY_ID.get(b.productId);
+  const orderA = productA ? canonicalProductOrder(productA) : Number.MAX_SAFE_INTEGER;
+  const orderB = productB ? canonicalProductOrder(productB) : Number.MAX_SAFE_INTEGER;
+  return orderA - orderB || a.productId.localeCompare(b.productId);
 }
 
 /**
@@ -65,7 +83,7 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     && context.week <= point.weekEnd,
   );
 
-  const doses: DryRunDose[] = points
+  const rawDoses: DryRunDose[] = points
     .filter(point => !(point.productId === 'katana-roots' && context.stage === GrowthStage.SEEDLING))
     .map(point => {
       const applyWaterModifier = profile.id === 'TERRA_LED_2024' && isTerraBaseProduct(point.productId) && waterAdjustment;
@@ -88,7 +106,7 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
   if (profile.id === 'TERRA_LED_2024') {
     const calMag = ledCalMagDoseMlPerL(backgroundEc, context.waterType);
     if (calMag.dose !== null) {
-      doses.push({
+      rawDoses.push({
         productId: 'calmag',
         baselineMlPerL: calMag.dose,
         resolvedMlPerL: calMag.dose,
@@ -100,7 +118,13 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     }
   }
 
-  const productIds = doses.map(dose => dose.productId);
+  // Exactly two projections, never a third ad-hoc list order.
+  const manufacturerDoses = [...rawDoses]
+    .sort((a, b) => compareByProfileManufacturerSource(profile, a, b));
+  const executionDoses = [...rawDoses]
+    .sort(compareDryRunByCanonicalExecution);
+
+  const productIds = rawDoses.map(dose => dose.productId);
   const conflictResolution = resolveNutritionConflicts({
     profile,
     stage: context.stage,
@@ -136,6 +160,7 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     `INDEPENDENT AUDIT: weekly plan = ${WORK_AUDIT_VERDICT.weeklyPlan}; automatic dose = ${WORK_AUDIT_VERDICT.automaticDoseSelection}; automatic execution = ${WORK_AUDIT_VERDICT.automaticExecution}.`,
     'DRY RUN does not write history, deduct inventory or enter the Technik Żywienia preparation/execution workflow.',
     'Displayed ml/L values are evidence-preview points, not an approved adaptive prescription.',
+    'Source view and execution view use the same dose records but independent, explicit orders.',
   ];
 
   if (profile.id === 'TERRA_LEGACY_HARD_SOFT') {
@@ -148,7 +173,9 @@ export function buildDryRunNutritionPlan(context: DryRunNutritionContext): DryRu
     profileLabel: profile.label,
     stage: context.stage,
     week: context.week,
-    doses,
+    manufacturerDoses,
+    executionDoses,
+    doses: executionDoses,
     conflicts: conflictResolution.findings,
     blockers: conflictResolution.blockers,
     warnings: conflictResolution.warnings,

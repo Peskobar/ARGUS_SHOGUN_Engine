@@ -7,6 +7,7 @@ const STORAGE_KEY = 'shogun_planner_state';
 const MAX_HISTORY_ITEMS = 1000;
 const MAX_SAFE_VOLUME_L = 10000;
 const MAX_SAFE_CONCENTRATION_ML_L = 1000;
+const MAX_SAFE_PRESENTATION_ORDER = 1_000_000;
 
 export interface AppState {
   stateVersion: number;
@@ -32,6 +33,8 @@ const validMethod = (value: unknown): value is ApplicationMethod => Object.value
 const validStage = (value: unknown): value is GrowthStage => Object.values(GrowthStage).includes(value as GrowthStage);
 const finiteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const safeString = (value: unknown, max = 300) => typeof value === 'string' ? value.slice(0, max) : '';
+const safePresentationOrder = (value: unknown) =>
+  finiteNumber(value) && Math.abs(value) <= MAX_SAFE_PRESENTATION_ORDER ? value : undefined;
 
 export function useAppStore() {
   const [state, setState] = useState<AppState>(() => loadPersistedState());
@@ -244,8 +247,9 @@ function sanitizeCustomRecipe(raw: unknown): Recipe | null {
     const productId = safeString(ingredient.productId, 120);
     const concentration = ingredient.concentration;
     if (!productId || !finiteNumber(concentration) || concentration < 0 || concentration > MAX_SAFE_CONCENTRATION_ML_L) return [];
-    const mixOrder = finiteNumber(ingredient.mixOrder) ? ingredient.mixOrder : undefined;
-    return [{ productId, concentration, mixOrder }];
+    const sourceOrder = safePresentationOrder(ingredient.sourceOrder);
+    const mixOrder = safePresentationOrder(ingredient.mixOrder);
+    return [{ productId, concentration, sourceOrder, mixOrder }];
   });
 
   if (!ingredients.length && method !== ApplicationMethod.READY_TO_SPRAY) return null;
@@ -262,7 +266,7 @@ function sanitizeCustomRecipe(raw: unknown): Recipe | null {
     stage,
     ingredients,
     waterProfiles: waterProfiles?.length ? waterProfiles : undefined,
-    source: safeString(candidate.source, 300) || 'Custom recipe',
+    source: safeString(candidate.source, 300) || 'Receptura własna',
     sourceDate: safeString(candidate.sourceDate, 60) || undefined,
     sourceUrl: safeString(candidate.sourceUrl, 500) || undefined,
     // Verification is a privilege. User/persisted recipes can only enter as UNVERIFIED.
