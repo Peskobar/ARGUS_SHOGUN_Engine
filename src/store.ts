@@ -94,7 +94,20 @@ export function useAppStore() {
 }
 
 function loadPersistedState(): AppState {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(STORAGE_KEY);
+  } catch (error) {
+    console.error('Failed to read persisted planner state', error);
+  }
+  return rehydratePersistedState(saved);
+}
+
+/**
+ * Pure trust-boundary function used by runtime and adversarial tests.
+ * Persisted JSON is always treated as untrusted input.
+ */
+export function rehydratePersistedState(saved: string | null): AppState {
   if (!saved) return cloneDefaultState();
 
   try {
@@ -149,7 +162,10 @@ function mergeInventory(factory: Product[], saved: unknown[]): Product[] {
     const index = result.findIndex(product => product.id === id);
     if (index >= 0) {
       if (finiteNumber(candidate.remainingCapacity) && candidate.remainingCapacity >= 0) {
-        result[index] = { ...result[index], remainingCapacity: candidate.remainingCapacity };
+        result[index] = {
+          ...result[index],
+          remainingCapacity: Math.min(candidate.remainingCapacity, result[index].initialCapacity),
+        };
       }
       continue;
     }
@@ -170,7 +186,15 @@ function sanitizeCustomProduct(raw: Record<string, unknown>): Product | null {
   const compatibleMedia = Array.isArray(raw.compatibleMedia) ? raw.compatibleMedia.filter(validMedium) : [];
   const type = raw.type;
 
-  if (!id || !name || !finiteNumber(initialCapacity) || initialCapacity < 0 || !finiteNumber(remainingCapacity) || remainingCapacity < 0) return null;
+  if (
+    !id
+    || !name
+    || !finiteNumber(initialCapacity)
+    || initialCapacity < 0
+    || !finiteNumber(remainingCapacity)
+    || remainingCapacity < 0
+    || remainingCapacity > initialCapacity
+  ) return null;
   if (!['FERTILIZER', 'ADDITIVE', 'BIOLOGICAL', 'READY_TO_USE'].includes(String(type))) return null;
 
   return {
