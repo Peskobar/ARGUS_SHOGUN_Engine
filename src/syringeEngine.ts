@@ -1,18 +1,18 @@
 import type { AllocationMode, SyringeType } from './types';
 
 export interface AllocatedSyringe {
-  /** Backward-compatible display label used by the current UI. */
   type: string;
   amount: number;
   toolTypeId: string;
   instanceId: string;
   capacity: number;
+  precisionStep: number;
   kind: 'SYRINGE' | 'PIPETTE';
 }
 
 export interface AllocationPlan {
   productId: string;
-  totalVolumeRequired: number; // ml
+  totalVolumeRequired: number;
   syringes: AllocatedSyringe[];
 }
 
@@ -45,62 +45,71 @@ interface ToolInstance {
   instanceId: string;
   toolTypeId: string;
   capacity: number;
+  capacityUnits: number;
   label: string;
   kind: 'SYRINGE' | 'PIPETTE';
   precisionStep: number;
+  stepUnits: number;
   sourceOrder: number;
 }
 
+interface PlannedFill {
+  instanceId: string;
+  amountUnits: number;
+}
+
+const UNITS_PER_ML = 100;
 const EPSILON = 0.005;
 
 /**
- * Allocates one physical tool instance at most once across the entire prepared set.
- * Different products never share a tool in the same allocation result.
+ * Allocates each physical tool instance at most once across the prepared set.
+ * Every assigned amount must be representable by the real graduation step of
+ * that tool. If an exact measurable plan does not exist, allocation fails.
  */
 export function allocateToolSet(
   requests: DoseRequest[],
   availableTools: SyringeType[],
-  mode: AllocationMode = 'PRECISION'
+  mode: AllocationMode = 'PRECISION',
 ): ToolSetAllocation {
-  const pool = expandTools(availableTools);
+  let pool = expandTools(availableTools);
   const assignments: Record<string, AllocatedSyringe[]> = {};
   const shortages: AllocationShortage[] = [];
 
-  // Large doses first so small doses do not accidentally consume scarce large tools.
   const orderedRequests = [...requests]
-    .filter(request => request.volumeMl > EPSILON)
-    .sort((a, b) => b.volumeMl - a.volumeMl);
+    .filter(request => Number.isFinite(request.volumeMl) && request.volumeMl > EPSILON)
+    .sort((a, b) => b.volumeMl - a.volumeMl || a.productId.localeCompare(b.productId));
 
   for (const request of orderedRequests) {
-    let remaining = roundMl(request.volumeMl);
+    const targetUnits = toUnits(request.volumeMl);
+    const plan = findExactMeasurablePlan(pool, targetUnits, mode);
     assignments[request.productId] = [];
 
-    while (remaining > EPSILON) {
-      const bestIndex = chooseToolIndex(pool, remaining, mode);
-      if (bestIndex < 0) {
-        shortages.push({ productId: request.productId, remainingMl: roundMl(remaining) });
-        break;
-      }
+    if (!plan) {
+      shortages.push({ productId: request.productId, remainingMl: fromUnits(targetUnits) });
+      continue;
+    }
 
-      const [tool] = pool.splice(bestIndex, 1);
-      const amount = roundMl(Math.min(remaining, tool.capacity));
-      assignments[request.productId].push({
+    const usedIds = new Set(plan.map(fill => fill.instanceId));
+    const poolById = new Map(pool.map(tool => [tool.instanceId, tool]));
+
+    assignments[request.productId] = plan.map(fill => {
+      const tool = poolById.get(fill.instanceId);
+      if (!tool) throw new Error(`Tool ${fill.instanceId} disappeared during allocation.`);
+      return {
         type: tool.label,
-        amount,
+        amount: fromUnits(fill.amountUnits),
         toolTypeId: tool.toolTypeId,
         instanceId: tool.instanceId,
         capacity: tool.capacity,
+        precisionStep: tool.precisionStep,
         kind: tool.kind,
-      });
+      };
+    });
 
-      remaining = roundMl(remaining - amount);
-    }
+    pool = pool.filter(tool => !usedIds.has(tool.instanceId));
   }
 
-  // Keep zero-volume products visible to callers that prebuild request maps.
-  for (const request of requests) {
-    assignments[request.productId] ??= [];
-  }
+  for (const request of requests) assignments[request.productId] ??= [];
 
   const usage = availableTools.map(tool => {
     const used = Object.values(assignments)
@@ -115,106 +124,142 @@ export function allocateToolSet(
     };
   });
 
-  return {
-    assignments,
-    shortages,
-    usage,
-    complete: shortages.length === 0,
-  };
+  return { assignments, shortages, usage, complete: shortages.length === 0 };
 }
 
-/**
- * Backward-compatible helper used by the current UI for a single product.
- * It now respects the finite count of physical tools for that dose.
- */
 export function calculateSyringes(
   totalVolumeMl: number,
   availableSyringes: SyringeType[],
-  mode: AllocationMode = 'PRECISION'
+  mode: AllocationMode = 'PRECISION',
 ): AllocatedSyringe[] {
-  if (totalVolumeMl <= EPSILON) return [];
-
+  if (!Number.isFinite(totalVolumeMl) || totalVolumeMl <= EPSILON) return [];
   const result = allocateToolSet(
     [{ productId: '__single__', volumeMl: totalVolumeMl }],
     availableSyringes,
     mode,
   );
-
   return result.assignments.__single__ ?? [];
+}
+
+export function isMeasurableAmount(amountMl: number, tool: SyringeType): boolean {
+  if (!Number.isFinite(amountMl) || amountMl < 0 || amountMl > tool.capacity + EPSILON) return false;
+  const step = tool.precisionStep ?? defaultPrecisionStep(tool.capacity);
+  const amountUnits = toUnits(amountMl);
+  const stepUnits = Math.max(1, toUnits(step));
+  return amountUnits % stepUnits === 0;
+}
+
+function findExactMeasurablePlan(
+  availablePool: ToolInstance[],
+  targetUnits: number,
+  mode: AllocationMode,
+): PlannedFill[] | null {
+  if (targetUnits <= 0) return [];
+
+  const tools = [...availablePool].sort((a, b) => compareToolPreference(a, b, mode));
+  const suffixCapacity = new Array<number>(tools.length + 1).fill(0);
+  for (let index = tools.length - 1; index >= 0; index -= 1) {
+    suffixCapacity[index] = suffixCapacity[index + 1] + tools[index].capacityUnits;
+  }
+
+  const memo = new Map<string, PlannedFill[] | null>();
+
+  const dfs = (index: number, remaining: number): PlannedFill[] | null => {
+    if (remaining === 0) return [];
+    if (index >= tools.length || remaining < 0 || remaining > suffixCapacity[index]) return null;
+
+    const key = `${index}:${remaining}`;
+    if (memo.has(key)) return memo.get(key) ?? null;
+
+    const tool = tools[index];
+    const maxFill = Math.floor(Math.min(tool.capacityUnits, remaining) / tool.stepUnits) * tool.stepUnits;
+
+    if (maxFill > 0) {
+      const amounts = candidateAmounts(maxFill, tool.stepUnits, remaining, mode);
+      for (const amountUnits of amounts) {
+        const tail = dfs(index + 1, remaining - amountUnits);
+        if (tail) {
+          const result = [{ instanceId: tool.instanceId, amountUnits }, ...tail];
+          memo.set(key, result);
+          return result;
+        }
+      }
+    }
+
+    const skipped = dfs(index + 1, remaining);
+    memo.set(key, skipped);
+    return skipped;
+  };
+
+  return dfs(0, targetUnits);
+}
+
+function candidateAmounts(
+  maxFill: number,
+  stepUnits: number,
+  remaining: number,
+  mode: AllocationMode,
+): number[] {
+  const amounts: number[] = [];
+
+  if (remaining <= maxFill && remaining % stepUnits === 0) amounts.push(remaining);
+
+  for (let amount = maxFill; amount >= stepUnits; amount -= stepUnits) {
+    if (!amounts.includes(amount)) amounts.push(amount);
+  }
+
+  if (mode === 'PRECISION') {
+    // Exact single-tool fills are already first. Among split fills, retain larger
+    // chunks while the tool preference sort prioritizes finer graduations.
+    return amounts;
+  }
+
+  return amounts;
 }
 
 function expandTools(tools: SyringeType[]): ToolInstance[] {
   const instances: ToolInstance[] = [];
-
   tools.forEach((tool, sourceOrder) => {
     const count = Math.max(0, Math.floor(tool.count));
+    const precisionStep = tool.precisionStep ?? defaultPrecisionStep(tool.capacity);
     for (let index = 0; index < count; index += 1) {
       instances.push({
         instanceId: `${tool.id}#${index + 1}`,
         toolTypeId: tool.id,
         capacity: tool.capacity,
+        capacityUnits: toUnits(tool.capacity),
         label: tool.label,
         kind: tool.type,
-        precisionStep: tool.precisionStep ?? defaultPrecisionStep(tool.capacity),
+        precisionStep,
+        stepUnits: Math.max(1, toUnits(precisionStep)),
         sourceOrder,
       });
     }
   });
-
   return instances;
 }
 
-function chooseToolIndex(
-  pool: ToolInstance[],
-  remaining: number,
-  mode: AllocationMode,
-): number {
-  if (pool.length === 0) return -1;
-
-  const fitting = pool
-    .map((tool, index) => ({ tool, index }))
-    .filter(({ tool }) => tool.capacity + EPSILON >= remaining);
-
-  if (fitting.length > 0) {
-    fitting.sort((a, b) => compareFittingTools(a.tool, b.tool, mode));
-    return fitting[0].index;
-  }
-
-  // No single tool can hold the remainder. Consume the largest available tool.
-  return pool
-    .map((tool, index) => ({ tool, index }))
-    .sort((a, b) =>
-      b.tool.capacity - a.tool.capacity ||
-      a.tool.sourceOrder - b.tool.sourceOrder ||
-      a.tool.instanceId.localeCompare(b.tool.instanceId)
-    )[0].index;
-}
-
-function compareFittingTools(a: ToolInstance, b: ToolInstance, mode: AllocationMode): number {
+function compareToolPreference(a: ToolInstance, b: ToolInstance, mode: AllocationMode): number {
   if (mode === 'PRECISION') {
     return (
-      a.capacity - b.capacity ||
       a.precisionStep - b.precisionStep ||
+      b.capacity - a.capacity ||
       a.sourceOrder - b.sourceOrder ||
       a.instanceId.localeCompare(b.instanceId)
     );
   }
 
   if (mode === 'SPEED') {
-    // Prefer a familiar syringe over a pipette for the same one-step fill,
-    // then keep selection deterministic.
     return (
+      b.capacity - a.capacity ||
       kindRank(a.kind) - kindRank(b.kind) ||
-      a.capacity - b.capacity ||
       a.sourceOrder - b.sourceOrder ||
       a.instanceId.localeCompare(b.instanceId)
     );
   }
 
-  // MIN_TOOLS: one fitting tool always completes this remainder in one operation.
-  // Choose the smallest fitting tool to preserve larger tools for other products.
   return (
-    a.capacity - b.capacity ||
+    b.capacity - a.capacity ||
     a.sourceOrder - b.sourceOrder ||
     a.instanceId.localeCompare(b.instanceId)
   );
@@ -231,6 +276,10 @@ function defaultPrecisionStep(capacity: number): number {
   return 0.5;
 }
 
-function roundMl(value: number): number {
-  return Number(value.toFixed(2));
+function toUnits(valueMl: number): number {
+  return Math.round(valueMl * UNITS_PER_ML);
+}
+
+function fromUnits(value: number): number {
+  return Number((value / UNITS_PER_ML).toFixed(2));
 }

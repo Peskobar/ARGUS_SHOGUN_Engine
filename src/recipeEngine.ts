@@ -13,24 +13,28 @@ export interface RecipeContext {
   medium: Medium;
   method: ApplicationMethod;
   stage: GrowthStage;
+  week?: number;
   waterType?: WaterType;
 }
 
 export interface RecipeExecutionStep {
+  kind: 'PRODUCT';
+  id: string;
   ingredient: RecipeIngredient;
   product: Product;
   order: number;
 }
 
-export type ExecutionProtocolStep =
-  | {
-      kind: 'ACTION';
-      id: string;
-      order: number;
-      title: string;
-      detail?: string;
-    }
-  | ({ kind: 'PRODUCT' } & RecipeExecutionStep);
+export interface ProtocolActionStep {
+  kind: 'ACTION';
+  id: string;
+  order: number;
+  title: string;
+  detail?: string;
+  measurement?: 'PRE_BASE_PH' | 'FINAL_EC' | 'FINAL_PH';
+}
+
+export type ExecutionProtocolStep = RecipeExecutionStep | ProtocolActionStep;
 
 export interface RecipeValidationWarning {
   code:
@@ -42,9 +46,11 @@ export interface RecipeValidationWarning {
     | 'INVALID_CONCENTRATION'
     | 'DUPLICATE_PRODUCT'
     | 'UNSUPPORTED_DOSING_UNIT'
-    | 'SILICON_AFTER_BASE'
+    | 'UNSAFE_MIX_ORDER'
     | 'RECIPE_UNVERIFIED'
-    | 'RECIPE_CONFLICT';
+    | 'RECIPE_CONFLICT'
+    | 'PHYSICAL_EXECUTION_NOT_ALLOWED'
+    | 'WEEK_MISMATCH';
   productId?: string;
   severity: 'WARNING' | 'ERROR';
   message: string;
@@ -57,10 +63,6 @@ export interface InventoryShortage {
   availableMl: number;
 }
 
-/**
- * Default product-addition order. It is deliberately separate from process
- * checkpoints such as pH measurements.
- */
 const ROLE_ORDER: Record<string, number> = {
   SILICON: 100,
   CALMAG: 300,
@@ -75,12 +77,35 @@ const ROLE_ORDER: Record<string, number> = {
   PH_ADJUSTER: 1200,
 };
 
+/** Critical order policy. Custom mixOrder may refine order only if this monotonic role order is preserved. */
+const ROOT_FEED_SAFE_ROLE_ORDER: MixingRole[] = [
+  'SILICON' as MixingRole,
+  'CALMAG' as MixingRole,
+  'BASE' as MixingRole,
+  'ROOTS' as MixingRole,
+  'ENZYME' as MixingRole,
+  'BOOSTER' as MixingRole,
+  'PK' as MixingRole,
+  'BIOLOGICAL' as MixingRole,
+  'OTHER' as MixingRole,
+  'PH_ADJUSTER' as MixingRole,
+];
+
+export function recipeMatchesWeek(recipe: Recipe, week?: number): boolean {
+  if (week === undefined) return true;
+  if (!Number.isInteger(week) || week < 1) return false;
+  if (recipe.weekStart !== undefined && week < recipe.weekStart) return false;
+  if (recipe.weekEnd !== undefined && week > recipe.weekEnd) return false;
+  return true;
+}
+
 /** Strict context filter. READY_TO_SPRAY is never a wildcard. */
 export function filterRecipes(recipes: Recipe[], context: RecipeContext): Recipe[] {
   return recipes.filter(recipe => {
     if (!recipe.medium.includes(context.medium)) return false;
     if (recipe.method !== context.method) return false;
     if (!(recipe.stage === context.stage || String(recipe.stage) === 'ALL')) return false;
+    if (!recipeMatchesWeek(recipe, context.week)) return false;
     if (
       context.waterType &&
       recipe.waterProfiles?.length &&
@@ -92,23 +117,17 @@ export function filterRecipes(recipes: Recipe[], context: RecipeContext): Recipe
   });
 }
 
-/**
- * Produces only product-addition steps. Explicit mixOrder always wins.
- * Equal-order products preserve recipe source order; alphabetical sorting is
- * intentionally avoided because chemistry should not depend on a product name.
- */
-export function buildExecutionSteps(
-  recipe: Recipe,
-  products: Product[],
-): RecipeExecutionStep[] {
+/** Explicit mixOrder wins only for sorting. validateRecipeContext still enforces the safe sequence policy. */
+export function buildExecutionSteps(recipe: Recipe, products: Product[]): RecipeExecutionStep[] {
   const productMap = new Map(products.map(product => [product.id, product]));
 
   return recipe.ingredients
     .map((ingredient, sourceIndex) => {
       const product = productMap.get(ingredient.productId);
       if (!product) return null;
-
       return {
+        kind: 'PRODUCT' as const,
+        id: `product:${product.id}`,
         ingredient,
         product,
         sourceIndex,
@@ -120,17 +139,8 @@ export function buildExecutionSteps(
     .map(({ sourceIndex: _sourceIndex, ...step }) => step);
 }
 
-/**
- * Returns a safe default ingredient order based on product roles. Existing
- * explicit mixOrder values are intentionally ignored. The caller may then let
- * the operator override this order explicitly.
- */
-export function orderIngredientsByRole(
-  ingredients: RecipeIngredient[],
-  products: Product[],
-): RecipeIngredient[] {
+export function orderIngredientsByRole(ingredients: RecipeIngredient[], products: Product[]): RecipeIngredient[] {
   const productMap = new Map(products.map(product => [product.id, product]));
-
   return ingredients
     .map((ingredient, sourceIndex) => ({
       ingredient,
@@ -138,27 +148,12 @@ export function orderIngredientsByRole(
       order: roleOrder(productMap.get(ingredient.productId)?.mixingRole),
     }))
     .sort((a, b) => a.order - b.order || a.sourceIndex - b.sourceIndex)
-    .map(({ ingredient }, index) => ({
-      ...ingredient,
-      mixOrder: (index + 1) * 100,
-    }));
+    .map(({ ingredient }, index) => ({ ...ingredient, mixOrder: (index + 1) * 100 }));
 }
 
-/**
- * Full operator-facing protocol. For ROOT_FEED it models the water start,
- * the post-Silicon pH checkpoint, EC verification and final pH verification.
- * Other application methods receive product steps only because their procedure
- * is recipe-specific and must not inherit ROOT_FEED assumptions.
- */
-export function buildExecutionProtocol(
-  recipe: Recipe,
-  products: Product[],
-): ExecutionProtocolStep[] {
+export function buildExecutionProtocol(recipe: Recipe, products: Product[]): ExecutionProtocolStep[] {
   const productSteps = buildExecutionSteps(recipe, products);
-
-  if (String(recipe.method) !== 'ROOT_FEED') {
-    return productSteps.map(step => ({ kind: 'PRODUCT' as const, ...step }));
-  }
+  if (recipe.method !== ('ROOT_FEED' as ApplicationMethod)) return productSteps;
 
   const protocol: ExecutionProtocolStep[] = [
     {
@@ -166,25 +161,23 @@ export function buildExecutionProtocol(
       id: 'water-start',
       order: 0,
       title: 'Woda bazowa',
-      detail: 'Zacznij od odmierzonej objętości wody. Nie mieszaj koncentratów ze sobą poza wodą.',
+      detail: 'Rozpocznij od odmierzonej objętości wody. Koncentratów nie łącz bezpośrednio ze sobą.',
     },
   ];
 
-  const siliconSteps = productSteps.filter(
-    step => String(step.product.mixingRole) === 'SILICON',
-  );
-  const lastSiliconStep = siliconSteps[siliconSteps.length - 1];
+  const siliconSteps = productSteps.filter(step => String(step.product.mixingRole) === 'SILICON');
+  const lastSilicon = siliconSteps[siliconSteps.length - 1];
 
   for (const step of productSteps) {
-    protocol.push({ kind: 'PRODUCT', ...step });
-
-    if (lastSiliconStep && step === lastSiliconStep) {
+    protocol.push(step);
+    if (lastSilicon && step.id === lastSilicon.id) {
       protocol.push({
         kind: 'ACTION',
-        id: 'post-silicon-ph',
+        id: 'pre-base-ph-gate',
         order: step.order + 0.001,
-        title: 'Wymieszaj i skontroluj pH po Silicon',
-        detail: 'To osobny checkpoint przed kolejnymi koncentratami. Korektę wykonuj według aktualnej instrukcji producenta/receptury.',
+        title: 'PRE-BASE pH gate',
+        detail: 'Po Silicon wymieszaj roztwór i potwierdź rzeczywisty pomiar pH przed kolejnymi koncentratami.',
+        measurement: 'PRE_BASE_PH',
       });
     }
   }
@@ -192,17 +185,19 @@ export function buildExecutionProtocol(
   protocol.push(
     {
       kind: 'ACTION',
-      id: 'final-ec',
+      id: 'final-ec-gate',
       order: 9000,
-      title: 'Pomiar EC',
-      detail: 'Zmierz EC kompletnego roztworu przed końcową korektą.',
+      title: 'Końcowy pomiar EC',
+      detail: 'Wprowadź rzeczywisty odczyt EC gotowego roztworu.',
+      measurement: 'FINAL_EC',
     },
     {
       kind: 'ACTION',
-      id: 'final-ph',
+      id: 'final-ph-gate',
       order: 9100,
-      title: 'Końcowa kontrola pH',
-      detail: 'Po pełnym wymieszaniu wykonaj końcowy pomiar i ewentualną korektę pH.',
+      title: 'Końcowy pomiar pH',
+      detail: 'Wprowadź rzeczywisty odczyt pH po pełnym wymieszaniu.',
+      measurement: 'FINAL_PH',
     },
   );
 
@@ -212,17 +207,24 @@ export function buildExecutionProtocol(
 export function validateRecipeContext(
   recipe: Recipe,
   products: Product[],
-  context: Pick<RecipeContext, 'medium' | 'method'>,
+  context: Pick<RecipeContext, 'medium' | 'method' | 'week'>,
+  intent: 'SIMULATION' | 'PHYSICAL_EXECUTION' = 'SIMULATION',
 ): RecipeValidationWarning[] {
   const productMap = new Map(products.map(product => [product.id, product]));
   const warnings: RecipeValidationWarning[] = [];
   const seenProducts = new Set<string>();
 
-  if (recipe.verificationStatus === 'UNVERIFIED') {
+  if (!recipeMatchesWeek(recipe, context.week)) {
+    warnings.push({ code: 'WEEK_MISMATCH', severity: 'ERROR', message: 'Receptura nie obejmuje wybranego tygodnia.' });
+  }
+
+  if (recipe.verificationStatus === 'UNVERIFIED' || !recipe.verificationStatus) {
     warnings.push({
       code: 'RECIPE_UNVERIFIED',
-      severity: 'WARNING',
-      message: 'Receptura ma status UNVERIFIED. Dawki wymagają osobnego audytu źródeł przed uznaniem ich za zweryfikowane.',
+      severity: intent === 'PHYSICAL_EXECUTION' ? 'ERROR' : 'WARNING',
+      message: intent === 'PHYSICAL_EXECUTION'
+        ? 'Receptura jest UNVERIFIED. Fizyczne wykonanie jest zablokowane; dostępna pozostaje symulacja.'
+        : 'Receptura jest UNVERIFIED. Wynik jest tylko podglądem/symulacją.',
     });
   }
 
@@ -230,15 +232,23 @@ export function validateRecipeContext(
     warnings.push({
       code: 'RECIPE_CONFLICT',
       severity: 'ERROR',
-      message: 'Receptura ma status CONFLICT. Nie wykonuj jej do czasu rozstrzygnięcia sprzecznych danych źródłowych.',
+      message: 'Receptura ma nierozwiązany konflikt źródeł.',
     });
   }
 
-  if (String(context.method) === 'READY_TO_SPRAY' && recipe.ingredients.length !== 1) {
+  if (intent === 'PHYSICAL_EXECUTION' && recipe.executionPolicy !== 'PHYSICAL_ALLOWED') {
+    warnings.push({
+      code: 'PHYSICAL_EXECUTION_NOT_ALLOWED',
+      severity: 'ERROR',
+      message: 'Ta receptura nie ma jawnego uprawnienia PHYSICAL_ALLOWED.',
+    });
+  }
+
+  if (recipe.method === ('READY_TO_SPRAY' as ApplicationMethod) && recipe.ingredients.length !== 1) {
     warnings.push({
       code: 'READY_TO_SPRAY_INGREDIENT_COUNT',
       severity: 'ERROR',
-      message: 'Receptura READY_TO_SPRAY musi wskazywać dokładnie jeden gotowy produkt, aby zużycie magazynowe było jednoznaczne.',
+      message: 'READY_TO_SPRAY musi wskazywać dokładnie jeden gotowy produkt.',
     });
   }
 
@@ -248,7 +258,7 @@ export function validateRecipeContext(
         code: 'DUPLICATE_PRODUCT',
         productId: ingredient.productId,
         severity: 'ERROR',
-        message: `Produkt ${ingredient.productId} występuje w recepturze więcej niż raz.`,
+        message: `Produkt ${ingredient.productId} występuje więcej niż raz.`,
       });
     }
     seenProducts.add(ingredient.productId);
@@ -258,7 +268,7 @@ export function validateRecipeContext(
         code: 'INVALID_CONCENTRATION',
         productId: ingredient.productId,
         severity: 'ERROR',
-        message: `Nieprawidłowe stężenie dla ${ingredient.productId}.`,
+        message: `Nieprawidłowa koncentracja dla ${ingredient.productId}.`,
       });
     }
 
@@ -268,7 +278,7 @@ export function validateRecipeContext(
         code: 'PRODUCT_NOT_FOUND',
         productId: ingredient.productId,
         severity: 'ERROR',
-        message: `Brak produktu ${ingredient.productId} w magazynie/modelu danych.`,
+        message: `Brak produktu ${ingredient.productId} w modelu danych.`,
       });
       continue;
     }
@@ -287,11 +297,11 @@ export function validateRecipeContext(
         code: 'UNSUPPORTED_DOSING_UNIT',
         productId: product.id,
         severity: 'ERROR',
-        message: `${product.name} ma jednostkę ${product.unit}. Obecny Syringe Engine obsługuje dawkowanie objętościowe tylko w ml.`,
+        message: `${product.name} używa jednostki ${product.unit}; ten silnik wykonawczy obsługuje wyłącznie dawkowanie objętościowe w ml.`,
       });
     }
 
-    if (String(context.method) === 'FOLIAR' && !product.foliarAllowed) {
+    if (context.method === ('FOLIAR' as ApplicationMethod) && !product.foliarAllowed) {
       warnings.push({
         code: 'FOLIAR_NOT_ALLOWED',
         productId: product.id,
@@ -300,7 +310,7 @@ export function validateRecipeContext(
       });
     }
 
-    if (String(context.method) === 'READY_TO_SPRAY' && product.type !== 'READY_TO_USE') {
+    if (context.method === ('READY_TO_SPRAY' as ApplicationMethod) && product.type !== 'READY_TO_USE') {
       warnings.push({
         code: 'READY_TO_SPRAY_PRODUCT_MISMATCH',
         productId: product.id,
@@ -310,33 +320,19 @@ export function validateRecipeContext(
     }
   }
 
-  if (String(context.method) === 'ROOT_FEED') {
-    const steps = buildExecutionSteps(recipe, products);
-    const firstBaseIndex = steps.findIndex(step => String(step.product.mixingRole) === 'BASE');
-    const lastSiliconIndex = steps.reduce(
-      (lastIndex, step, index) => String(step.product.mixingRole) === 'SILICON' ? index : lastIndex,
-      -1,
-    );
-
-    if (firstBaseIndex >= 0 && lastSiliconIndex > firstBaseIndex) {
-      warnings.push({
-        code: 'SILICON_AFTER_BASE',
-        severity: 'ERROR',
-        message: 'Silicon jest ustawiony po nawozie bazowym. Dla ROOT_FEED kolejność musi umieścić Silicon i jego checkpoint pH przed nawozem bazowym.',
-      });
-    }
+  if (context.method === ('ROOT_FEED' as ApplicationMethod) && !hasSafeRootFeedOrder(recipe, products)) {
+    warnings.push({
+      code: 'UNSAFE_MIX_ORDER',
+      severity: 'ERROR',
+      message: 'Jawny mixOrder narusza bezpieczną kolejność ról ROOT_FEED. Własna kolejność nie może omijać polityki wykonawczej.',
+    });
   }
 
   return warnings;
 }
 
-export function findInventoryShortages(
-  recipe: Recipe,
-  products: Product[],
-  volumeLitres: number,
-): InventoryShortage[] {
+export function findInventoryShortages(recipe: Recipe, products: Product[], volumeLitres: number): InventoryShortage[] {
   if (!Number.isFinite(volumeLitres) || volumeLitres <= 0) return [];
-
   const productMap = new Map(products.map(product => [product.id, product]));
   const shortages: InventoryShortage[] = [];
 
@@ -344,7 +340,6 @@ export function findInventoryShortages(
     if (ingredient.concentration <= 0) continue;
     const product = productMap.get(ingredient.productId);
     if (!product || product.unit !== 'ml') continue;
-
     const requiredMl = roundMl(ingredient.concentration * volumeLitres);
     if (product.remainingCapacity + 0.005 < requiredMl) {
       shortages.push({
@@ -357,6 +352,20 @@ export function findInventoryShortages(
   }
 
   return shortages;
+}
+
+function hasSafeRootFeedOrder(recipe: Recipe, products: Product[]): boolean {
+  const roleRank = new Map(ROOT_FEED_SAFE_ROLE_ORDER.map((role, index) => [String(role), index]));
+  let previousRank = -1;
+
+  for (const step of buildExecutionSteps(recipe, products)) {
+    const role = String(step.product.mixingRole ?? 'OTHER');
+    if (role === 'READY_TO_USE') return false;
+    const rank = roleRank.get(role) ?? roleRank.get('OTHER') ?? 999;
+    if (rank < previousRank) return false;
+    previousRank = rank;
+  }
+  return true;
 }
 
 function roleOrder(role?: MixingRole): number {
