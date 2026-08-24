@@ -12,9 +12,9 @@
     "smoke:backend": "node --experimental-strip-types scripts/backend-smoke.mjs",
     "smoke:nutrition": "tsx scripts/nutrition-smoke.ts",
     "smoke:nutrition-integrity": "tsx scripts/nutrition-integrity-smoke.ts",
-    "smoke:work-audit": "tsx scripts/work-audit-smoke.ts",
+    "smoke:work-audit": "tsx scripts/work-audit-smoke.ts && tsx scripts/release-architecture-smoke.ts",
     "smoke:release": "tsx scripts/release-architecture-smoke.ts",
-    "test": "npm run smoke:backend && npm run smoke:nutrition && npm run smoke:nutrition-integrity && npm run smoke:work-audit && npm run smoke:release",
+    "test": "npm run smoke:backend && npm run smoke:nutrition && npm run smoke:nutrition-integrity && npm run smoke:work-audit",
     "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
