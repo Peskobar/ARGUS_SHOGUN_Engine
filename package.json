@@ -15,6 +15,7 @@
     "smoke:unified-workflow": "tsx scripts/unified-workflow-smoke.ts",
     "smoke:numeric-adversarial": "tsx scripts/numeric-adversarial-smoke.ts",
     "smoke:storage-poisoning": "tsx scripts/storage-poisoning-smoke.ts",
+    "smoke:conflict-regression": "tsx scripts/conflict-regression-smoke.ts",
     "smoke:work-audit": "tsx scripts/work-audit-smoke.ts"
   },
   "dependencies": {
