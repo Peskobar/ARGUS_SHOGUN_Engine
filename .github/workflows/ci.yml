@@ -54,6 +54,9 @@ jobs:
       - name: Conflict regression smoke
         run: npm run smoke:conflict-regression
 
+      - name: Execution boundary smoke
+        run: npm run smoke:execution-boundary
+
       - name: Work audit smoke
         run: npm run smoke:work-audit
 
