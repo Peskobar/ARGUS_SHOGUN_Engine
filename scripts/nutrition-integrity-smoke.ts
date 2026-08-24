@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { GrowthStage, WaterType } from '../src/types';
+import { ApplicationMethod, GrowthStage, Medium, WaterType } from '../src/types';
+import { SHOGUN_PRODUCTS } from '../src/data';
+import { buildExecutionSteps } from '../src/recipeEngine';
 import { buildDryRunNutritionPlan, getDryRunDose } from '../src/dryRunNutritionPlan';
 import { buildNutritionExecutionHandoff } from '../src/nutritionExecutionBridge';
 import { buildObservedNutritionState } from '../src/observedNutritionState';
@@ -12,6 +14,35 @@ import {
   assessDecisionReadiness,
   canApplyAdaptiveChange,
 } from '../src/nutritionAuditLock';
+
+// Canonical physical order is domain-owned. Persisted/custom recipe ordering may
+// describe author intent/display order, but it must never override chemistry.
+const poisonedRecipe = {
+  id: 'adversarial-mix-order',
+  name: 'Adversarial mixOrder',
+  medium: [Medium.TERRA],
+  method: ApplicationMethod.ROOT_FEED,
+  stage: GrowthStage.VEG,
+  isFactory: false,
+  ingredients: [
+    { productId: 'katana-roots', concentration: 0.2, mixOrder: 1 },
+    { productId: 'samurai-terra-grow', concentration: 2, mixOrder: 2 },
+    { productId: 'calmag', concentration: 0.5, mixOrder: 3 },
+    { productId: 'silicon', concentration: 1, mixOrder: 999 },
+  ],
+};
+const poisonedExecution = buildExecutionSteps(poisonedRecipe, SHOGUN_PRODUCTS);
+assert.deepEqual(
+  poisonedExecution.map(step => step.product.id),
+  ['silicon', 'calmag', 'samurai-terra-grow', 'katana-roots'],
+  'custom mixOrder must not override canonical chemical execution order',
+);
+assert.equal(poisonedExecution.find(step => step.product.id === 'silicon')?.recipeOrder, 999);
+assert.ok(
+  (poisonedExecution.find(step => step.product.id === 'silicon')?.executionOrder ?? Infinity)
+    < (poisonedExecution.find(step => step.product.id === 'samurai-terra-grow')?.executionOrder ?? -Infinity),
+  'executionOrder remains independent from recipeOrder',
+);
 
 // A water label is not a live SOURCE_EC measurement.
 assert.equal(resolveLedTerraWaterAdjustment(undefined, WaterType.HARD).percent, 0);

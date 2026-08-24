@@ -1,3 +1,6 @@
+import { canonicalProductOrder } from './canonicalMixingSequence';
+import { SHOGUN_PRODUCTS } from './data';
+import { normalizeSourceEc } from './numericGuards';
 import { GrowthStage, WaterType } from './types';
 import {
   DecisionScenario,
@@ -80,6 +83,15 @@ export interface WeeklyNutritionPlan {
 }
 
 const ALL_PRODUCT_EVIDENCE: ProductEvidence[] = [SHOGUN_START_EVIDENCE, ...TERRA_EVIDENCE_MATRIX];
+const PRODUCT_BY_ID = new Map(SHOGUN_PRODUCTS.map(product => [product.id, product]));
+
+function compareProductDecisionsByCanonicalExecution(a: ProductDecision, b: ProductDecision) {
+  const productA = PRODUCT_BY_ID.get(a.productId);
+  const productB = PRODUCT_BY_ID.get(b.productId);
+  const orderA = productA ? canonicalProductOrder(productA) : Number.MAX_SAFE_INTEGER;
+  const orderB = productB ? canonicalProductOrder(productB) : Number.MAX_SAFE_INTEGER;
+  return orderA - orderB || a.productId.localeCompare(b.productId);
+}
 
 function resolveProductEvidence(productId: string) {
   return getProductEvidence(productId) ?? (productId === SHOGUN_START_EVIDENCE.productId ? SHOGUN_START_EVIDENCE : undefined);
@@ -257,20 +269,22 @@ export function evaluateProductDecision(
 export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutritionPlan {
   const systemWarnings: string[] = [];
   const waterNotes: string[] = [];
-  const profile = activeProfile(context);
+  const backgroundEc = normalizeSourceEc(context.backgroundEc);
+  const safeContext: NutritionContext = { ...context, backgroundEc };
+  const profile = activeProfile(safeContext);
   const manufacturerProfileResolved = profile.id === 'TERRA_LED_2024' || profile.id === 'TERRA_LEGACY_HARD_SOFT';
-  const manufacturerWaterClass = classifyShogunWaterFromMeasuredEc(context.backgroundEc);
+  const manufacturerWaterClass = classifyShogunWaterFromMeasuredEc(backgroundEc);
   const waterAdjustment = profile.id === 'TERRA_LED_2024'
-    ? resolveLedTerraWaterAdjustment(context.backgroundEc, context.waterType)
+    ? resolveLedTerraWaterAdjustment(backgroundEc, context.waterType)
     : null;
   const scheduleSignals = getManufacturerScheduleSignals(context.environment ?? {});
   const scheduleProfileResolved = context.scheduleProfileResolved === true;
   const applicationProtocols = APPLICATION_PROTOCOLS.filter(protocol => protocol.stage === context.stage);
 
   let waterStatus: WeeklyNutritionPlan['waterStatus'] = 'UNKNOWN';
-  if (typeof context.backgroundEc === 'number') {
+  if (backgroundEc !== undefined) {
     waterStatus = 'MEASURED';
-    waterNotes.push(`Użyto zmierzonego background EC: ${context.backgroundEc.toFixed(2)} mS/cm.`);
+    waterNotes.push(`Użyto zmierzonego background EC: ${backgroundEc.toFixed(2)} mS/cm.`);
     if (profile.id === 'TERRA_LED_2024' && waterAdjustment) waterNotes.push(waterAdjustment.rationale);
     if (manufacturerWaterClass === WaterType.HARD) waterNotes.push('Klasyfikator kalkulatora SHOGUN wskazuje HARD dla EC >0.4; to osobna informacja od dyskretnych korekt profilu LED.');
     else if (manufacturerWaterClass === WaterType.SOFT) waterNotes.push('Klasyfikator kalkulatora SHOGUN wskazuje SOFT dla EC <0.4; profil LED ma własne punkty EC 0 / 0.2 / 0.4 / 0.6+.');
@@ -305,9 +319,10 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
   if (context.medium !== 'TERRA_SOIL_PERLITE') systemWarnings.push('Evidence Matrix v1 jest zatwierdzona wyłącznie dla kontekstu TERRA/SOIL + perlit.');
 
   const products = ALL_PRODUCT_EVIDENCE
-    .map(entry => evaluateProductDecision(entry.productId, context, 'BASELINE'))
+    .map(entry => evaluateProductDecision(entry.productId, safeContext, 'BASELINE'))
     .filter((decision): decision is ProductDecision => Boolean(decision))
-    .filter(decision => decision.doseWindows.length > 0);
+    .filter(decision => decision.doseWindows.length > 0)
+    .sort(compareProductDecisionsByCanonicalExecution);
 
   const conflictResolution = resolveNutritionConflicts({
     profile,
@@ -315,7 +330,7 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     week: context.week,
     productIds: products.map(product => product.productId),
     waterType: context.waterType,
-    backgroundEc: context.backgroundEc,
+    backgroundEc,
   });
   for (const finding of conflictResolution.findings) {
     if (finding.severity !== 'INFO') systemWarnings.push(`${finding.title}: ${finding.action}`);
@@ -325,7 +340,7 @@ export function buildWeeklyNutritionPlan(context: NutritionContext): WeeklyNutri
     stage: context.stage,
     week: context.week,
     waterType: context.waterType,
-    backgroundEc: context.backgroundEc,
+    backgroundEc,
     waterStatus,
     manufacturerWaterClass,
     manufacturerProfileId: profile.id,

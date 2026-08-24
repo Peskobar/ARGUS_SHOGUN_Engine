@@ -2,9 +2,9 @@ name: ARGUS SHOGUN CI
 
 on:
   pull_request:
-    branches: [main, 'ui/**']
+    branches: [main, 'ui/**', 'nutrition/**', 'hardening/**']
   push:
-    branches: [main, 'ui/**', 'backend/**', 'nutrition/**']
+    branches: [main, 'ui/**', 'backend/**', 'nutrition/**', 'hardening/**']
 
 permissions:
   contents: read
@@ -38,6 +38,27 @@ jobs:
 
       - name: Nutrition integrity smoke
         run: npm run smoke:nutrition-integrity
+
+      - name: Unified nutrition workflow smoke
+        run: npm run smoke:unified-workflow
+
+      - name: Technik Zywienia Planner parity smoke
+        run: npm run smoke:technician-planner-parity
+
+      - name: Numeric adversarial smoke
+        run: npm run smoke:numeric-adversarial
+
+      - name: Storage poisoning smoke
+        run: npm run smoke:storage-poisoning
+
+      - name: Conflict regression smoke
+        run: npm run smoke:conflict-regression
+
+      - name: Execution boundary smoke
+        run: npm run smoke:execution-boundary
+
+      - name: Planner fail-closed boundary smoke
+        run: npm run smoke:planner-boundary
 
       - name: Work audit smoke
         run: npm run smoke:work-audit

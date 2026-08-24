@@ -1,3 +1,4 @@
+import { finiteNumber, normalizeRelativeHumidity, normalizeSourceEc } from './numericGuards';
 import { GrowthStage, WaterType } from './types';
 
 export type VerificationDimensionStatus = 'VERIFIED' | 'PARTIAL' | 'UNVERIFIED' | 'CONFLICT';
@@ -122,26 +123,32 @@ export const PARTIAL_SDS_COMPOSITION = {
 } as const;
 
 export function classifyShogunWaterFromMeasuredEc(backgroundEc?: number): WaterType | 'BOUNDARY' | null {
-  if (backgroundEc === undefined || !Number.isFinite(backgroundEc) || backgroundEc < 0) return null;
-  if (backgroundEc > 0.4) return WaterType.HARD;
-  if (backgroundEc < 0.4) return WaterType.SOFT;
+  const ec = normalizeSourceEc(backgroundEc);
+  if (ec === undefined) return null;
+  if (ec > 0.4) return WaterType.HARD;
+  if (ec < 0.4) return WaterType.SOFT;
   return 'BOUNDARY';
 }
 
 export function getManufacturerScheduleSignals(environment: FeedingEnvironment): FeedingScheduleProfile[] {
   const signals: FeedingScheduleProfile[] = [];
+  const leafTemperatureC = finiteNumber(environment.leafTemperatureC)
+    ? environment.leafTemperatureC
+    : undefined;
+  const relativeHumidity = normalizeRelativeHumidity(environment.relativeHumidity);
+
   if (
-    environment.leafTemperatureC !== undefined
-    && environment.relativeHumidity !== undefined
-    && environment.leafTemperatureC > 25
-    && environment.relativeHumidity < 50
+    leafTemperatureC !== undefined
+    && relativeHumidity !== undefined
+    && leafTemperatureC > 25
+    && relativeHumidity < 50
   ) signals.push('LIGHT');
 
   if (
-    environment.leafTemperatureC !== undefined
-    && environment.relativeHumidity !== undefined
-    && environment.leafTemperatureC < 25
-    && environment.relativeHumidity > 50
+    leafTemperatureC !== undefined
+    && relativeHumidity !== undefined
+    && leafTemperatureC < 25
+    && relativeHumidity > 50
   ) signals.push('STANDARD');
 
   if (environment.usesLed === true || environment.closedLoopActiveCoolingWithCo2 === true) signals.push('HEAVY');
