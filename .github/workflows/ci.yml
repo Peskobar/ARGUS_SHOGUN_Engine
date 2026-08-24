@@ -2,9 +2,9 @@ name: ARGUS SHOGUN CI
 
 on:
   pull_request:
-    branches: [main, 'ui/**']
+    branches: [main, 'ui/**', 'nutrition/**', 'hardening/**']
   push:
-    branches: [main, 'ui/**', 'backend/**', 'nutrition/**']
+    branches: [main, 'ui/**', 'backend/**', 'nutrition/**', 'hardening/**']
 
 permissions:
   contents: read
