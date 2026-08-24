@@ -57,6 +57,9 @@ jobs:
       - name: Execution boundary smoke
         run: npm run smoke:execution-boundary
 
+      - name: Planner fail-closed boundary smoke
+        run: npm run smoke:planner-boundary
+
       - name: Work audit smoke
         run: npm run smoke:work-audit
 
