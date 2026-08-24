@@ -840,7 +840,7 @@ function ContextSelect({
   );
 }
 
-function WarningBox({ tone, children }: { tone: 'amber' | 'red' | 'blue'; children: React.ReactNode }) {
+function WarningBox({ tone, children }: { key?: string; tone: 'amber' | 'red' | 'blue'; children: React.ReactNode }) {
   const classes = tone === 'red'
     ? 'border-red-500/20 bg-red-500/10 text-red-200'
     : tone === 'blue'
