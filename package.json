@@ -13,6 +13,7 @@
     "smoke:nutrition": "tsx scripts/nutrition-smoke.ts",
     "smoke:nutrition-integrity": "tsx scripts/nutrition-integrity-smoke.ts",
     "smoke:unified-workflow": "tsx scripts/unified-workflow-smoke.ts",
+    "smoke:technician-planner-parity": "tsx scripts/technician-planner-parity-smoke.ts",
     "smoke:numeric-adversarial": "tsx scripts/numeric-adversarial-smoke.ts",
     "smoke:storage-poisoning": "tsx scripts/storage-poisoning-smoke.ts",
     "smoke:conflict-regression": "tsx scripts/conflict-regression-smoke.ts",
