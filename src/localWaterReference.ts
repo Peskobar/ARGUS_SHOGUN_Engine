@@ -1,0 +1,16 @@
+export const EMMERICH_WATER_REFERENCE_2026 = {
+  id: 'stadtwerke-emmerich-2026-03-09',
+  sourceClass: 'LOCAL_WATER' as const,
+  sourceDate: '2026-03-09',
+  sourceLabel: 'Stadtwerke Emmerich Trinkwasseranalyse 09.03.2026',
+  status: 'REFERENCE_NOT_LIVE_MEASUREMENT' as const,
+  conductivityUsCm25C: 557,
+  backgroundEcMsCmApprox: 0.557,
+  pH: 7.46,
+  hardnessDh: 12.3,
+  hardnessClass: 'MEDIUM' as const,
+  calciumMgL: 75.5,
+  magnesiumMgL: 10.4,
+  alkalinityMmolLToPh43: 3.11,
+  note: 'Independent Work audit G1. Municipal network analysis is context only; current user tap measurements take precedence field-by-field.',
+} as const;

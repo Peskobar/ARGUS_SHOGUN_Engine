@@ -10,6 +10,10 @@ This repository separates **execution logic** from **recipe evidence**.
 - Factory recipe doses are currently marked `UNVERIFIED` and must not be treated as evidence-verified merely because the application can calculate them.
 - A recipe marked `CONFLICT` is blocked from execution until its source conflict is resolved.
 
+## User interface language
+
+The operator-facing interface is Polish-first. Internal enums and machine identifiers remain stable in English for code compatibility, but statuses, methods, stages, execution gates, evidence labels and decision outcomes are translated before they are shown to the operator. Source titles and canonical technical identifiers may remain in their original form when translating them would reduce traceability.
+
 ## Reality Lock rules
 
 For root-feed recipes the engine models process checkpoints, not only a flat ingredient list:
@@ -32,6 +36,7 @@ A custom recipe can override product order with `mixOrder`. The post-Silicon pH 
 - `src/store.ts` — local persisted state and atomic execution of inventory + history changes.
 - `src/data.ts` — product catalog and factory recipes. Factory doses remain `UNVERIFIED` until the evidence audit is complete.
 - `src/App.tsx` — UI wired to the domain engines. It does not maintain a competing copy of execution rules.
+- `src/uiPolish.ts` — central Polish presentation map for internal statuses, methods, stages, roles and decision terminology.
 - `scripts/backend-smoke.mjs` — regression tests for filtering, ordering, pH checkpoint placement, finite tools, validation and stock shortages.
 
 ## Local development

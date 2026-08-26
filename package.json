@@ -1,7 +1,7 @@
 {
   "name": "argus-shogun-engine",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -9,9 +9,16 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "smoke:backend:core": "tsx scripts/backend-smoke.mjs",
+    "smoke:execute-operation": "tsx scripts/execute-operation-failure-smoke.ts",
+    "smoke:p0-domain": "tsx scripts/p0-domain-invariants-smoke.ts",
+    "smoke:nutrition": "tsx scripts/nutrition-smoke.ts",
+    "smoke:nutrition-integrity": "tsx scripts/nutrition-integrity-smoke.ts",
+    "smoke:work-audit": "tsx scripts/work-audit-smoke.ts",
+    "smoke:release": "tsx scripts/release-architecture-smoke.ts",
+    "smoke:backend": "npm run smoke:backend:core && npm run smoke:execute-operation && npm run smoke:p0-domain && npm run smoke:nutrition && npm run smoke:nutrition-integrity && npm run smoke:work-audit && npm run smoke:release",
     "test": "npm run smoke:backend",
-    "smoke:backend": "node --experimental-strip-types scripts/backend-smoke.mjs",
-    "check": "npm run lint && npm run smoke:backend && npm run build"
+    "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "lucide-react": "^0.546.0",
@@ -26,6 +33,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.4",
     "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

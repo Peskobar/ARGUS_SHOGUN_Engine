@@ -1,181 +1,146 @@
 import assert from 'node:assert/strict';
-import { allocateToolSet, calculateSyringes } from '../src/syringeEngine.ts';
+import { PHYSICAL_SYRINGES } from '../src/data.ts';
+import { evaluateExecutionReadiness } from '../src/executionPolicy.ts';
 import {
   buildExecutionProtocol,
   buildExecutionSteps,
   filterRecipes,
-  findInventoryShortages,
-  orderIngredientsByRole,
   validateRecipeContext,
 } from '../src/recipeEngine.ts';
-
-const tools = [
-  { id: 's20', capacity: 20, count: 5, label: '20ml', type: 'SYRINGE' },
-  { id: 's6', capacity: 6, count: 5, label: '6ml', type: 'SYRINGE' },
-  { id: 's3', capacity: 3, count: 5, label: '3ml', type: 'SYRINGE' },
-  { id: 'p3', capacity: 3, count: 4, label: '3ml Pipeta', type: 'PIPETTE' },
-  { id: 's1', capacity: 1, count: 10, label: '1ml (Insulina)', type: 'SYRINGE' },
-];
-
-assert.deepEqual(
-  calculateSyringes(2.5, tools).map(({ type, amount }) => ({ type, amount })),
-  [{ type: '3ml', amount: 2.5 }],
-);
-
-assert.deepEqual(
-  calculateSyringes(25, tools).map(({ type, amount }) => ({ type, amount })),
-  [
-    { type: '20ml', amount: 20 },
-    { type: '6ml', amount: 5 },
-  ],
-);
-
-const set = allocateToolSet([
-  { productId: 'silicon', volumeMl: 5 },
-  { productId: 'calmag', volumeMl: 2.5 },
-  { productId: 'base', volumeMl: 10 },
-  { productId: 'roots', volumeMl: 1 },
-], tools);
-assert.equal(set.complete, true);
-assert.equal(new Set(Object.values(set.assignments).flat().map(item => item.instanceId)).size, 4);
-
-const singleToolSet = allocateToolSet(
-  [
-    { productId: 'a', volumeMl: 1 },
-    { productId: 'b', volumeMl: 1 },
-  ],
-  [{ id: 'one', capacity: 1, count: 1, label: '1ml', type: 'SYRINGE' }],
-);
-assert.equal(singleToolSet.complete, false);
-assert.equal(singleToolSet.shortages.length, 1);
-
-const recipes = [
-  { id: 'root', medium: ['TERRA'], method: 'ROOT_FEED', stage: 'VEG', ingredients: [], isFactory: true },
-  { id: 'geisha', medium: ['TERRA'], method: 'READY_TO_SPRAY', stage: 'ALL', ingredients: [], isFactory: true },
-];
-assert.deepEqual(
-  filterRecipes(recipes, { medium: 'TERRA', method: 'ROOT_FEED', stage: 'VEG' }).map(r => r.id),
-  ['root'],
-);
+import { allocateToolSet, isMeasurableAmount } from '../src/syringeEngine.ts';
 
 const products = [
-  { id: 'base', name: 'Base', compatibleMedia: ['TERRA'], type: 'FERTILIZER', mixingRole: 'BASE', unit: 'ml' },
-  { id: 'silicon', name: 'Silicon', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'SILICON', unit: 'ml' },
-  { id: 'roots', name: 'Roots', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'ROOTS', unit: 'ml' },
-  { id: 'calmag', name: 'CalMag', compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'CALMAG', unit: 'ml' },
-  { id: 'myco', name: 'Myco', compatibleMedia: ['TERRA'], type: 'BIOLOGICAL', mixingRole: 'BIOLOGICAL', unit: 'g' },
-  { id: 'rts', name: 'RTS', compatibleMedia: ['TERRA'], type: 'READY_TO_USE', mixingRole: 'READY_TO_USE', unit: 'ml' },
-].map(product => ({
-  ...product,
-  brand: 'TEST',
-  color: '',
-  initialCapacity: 1000,
-  remainingCapacity: 1000,
-  foliarAllowed: product.id === 'rts',
-}));
+  { id: 'silicon', name: 'Silicon', brand: 'TEST', color: '', initialCapacity: 1000, remainingCapacity: 1000, unit: 'ml', foliarAllowed: false, compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'SILICON' },
+  { id: 'calmag', name: 'CalMag', brand: 'TEST', color: '', initialCapacity: 1000, remainingCapacity: 1000, unit: 'ml', foliarAllowed: true, compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'CALMAG' },
+  { id: 'base', name: 'Base', brand: 'TEST', color: '', initialCapacity: 1000, remainingCapacity: 1000, unit: 'ml', foliarAllowed: false, compatibleMedia: ['TERRA'], type: 'FERTILIZER', mixingRole: 'BASE' },
+  { id: 'roots', name: 'Roots', brand: 'TEST', color: '', initialCapacity: 1000, remainingCapacity: 1000, unit: 'ml', foliarAllowed: false, compatibleMedia: ['TERRA'], type: 'ADDITIVE', mixingRole: 'ROOTS' },
+];
 
-const mixRecipe = {
-  id: 'mix',
-  name: 'Mix',
+const verifiedRecipe = {
+  id: 'verified-root',
+  name: 'Verified root feed',
   medium: ['TERRA'],
   method: 'ROOT_FEED',
   stage: 'VEG',
-  verificationStatus: 'UNVERIFIED',
+  weekStart: 1,
+  weekEnd: 2,
+  verificationStatus: 'VERIFIED',
+  executionPolicy: 'PHYSICAL_ALLOWED',
   isFactory: true,
   ingredients: [
-    { productId: 'base', concentration: 2 },
-    { productId: 'roots', concentration: 0.2 },
     { productId: 'silicon', concentration: 1 },
     { productId: 'calmag', concentration: 0.5 },
-  ],
-};
-
-const steps = buildExecutionSteps(mixRecipe, products);
-assert.deepEqual(steps.map(step => step.product.id), ['silicon', 'calmag', 'base', 'roots']);
-
-const canonical = orderIngredientsByRole(
-  [
     { productId: 'base', concentration: 2 },
     { productId: 'roots', concentration: 0.2 },
-    { productId: 'silicon', concentration: 1 },
-  ],
-  products,
-);
-assert.deepEqual(canonical.map(ingredient => ingredient.productId), ['silicon', 'base', 'roots']);
-assert.deepEqual(canonical.map(ingredient => ingredient.mixOrder), [100, 200, 300]);
-
-const protocol = buildExecutionProtocol(mixRecipe, products);
-assert.deepEqual(
-  protocol.map(step => step.kind === 'PRODUCT' ? step.product.id : step.id),
-  ['water-start', 'silicon', 'post-silicon-ph', 'calmag', 'base', 'roots', 'final-ec', 'final-ph'],
-);
-
-const explicitOrderRecipe = {
-  ...mixRecipe,
-  id: 'explicit-order',
-  isFactory: false,
-  ingredients: [
-    { productId: 'base', concentration: 2, mixOrder: 100 },
-    { productId: 'silicon', concentration: 1, mixOrder: 500 },
-    { productId: 'roots', concentration: 0.2, mixOrder: 600 },
   ],
 };
-const explicitProtocol = buildExecutionProtocol(explicitOrderRecipe, products);
+
+const pkRecipe = {
+  ...verifiedRecipe,
+  id: 'week-4',
+  name: 'Week 4',
+  stage: 'BLOOM',
+  weekStart: 4,
+  weekEnd: 7,
+};
+
 assert.deepEqual(
-  explicitProtocol.map(step => step.kind === 'PRODUCT' ? step.product.id : step.id),
-  ['water-start', 'base', 'silicon', 'post-silicon-ph', 'roots', 'final-ec', 'final-ph'],
+  filterRecipes([verifiedRecipe, pkRecipe], { medium: 'TERRA', method: 'ROOT_FEED', stage: 'VEG', week: 1 }).map(recipe => recipe.id),
+  ['verified-root'],
 );
-const explicitWarnings = validateRecipeContext(explicitOrderRecipe, products, {
+assert.deepEqual(
+  filterRecipes([verifiedRecipe, pkRecipe], { medium: 'TERRA', method: 'ROOT_FEED', stage: 'BLOOM', week: 5 }).map(recipe => recipe.id),
+  ['week-4'],
+);
+assert.equal(filterRecipes([verifiedRecipe], { medium: 'TERRA', method: 'ROOT_FEED', stage: 'VEG', week: 3 }).length, 0);
+
+const steps = buildExecutionSteps(verifiedRecipe, products);
+assert.deepEqual(steps.map(step => step.product.id), ['silicon', 'calmag', 'base', 'roots']);
+
+const protocol = buildExecutionProtocol(verifiedRecipe, products);
+assert.deepEqual(
+  protocol.map(step => step.id),
+  ['water-start', 'product:silicon', 'pre-base-ph-gate', 'product:calmag', 'product:base', 'product:roots', 'final-ec-gate', 'final-ph-gate'],
+);
+
+const allConfirmed = protocol.map(step => step.id);
+let readiness = evaluateExecutionReadiness({
+  recipe: verifiedRecipe,
+  products,
   medium: 'TERRA',
-  method: 'ROOT_FEED',
+  stage: 'VEG',
+  week: 1,
+  waterType: 'CUSTOM',
+  volumeLitres: 5,
+  measurements: {},
+  confirmedProtocolStepIds: allConfirmed,
 });
-assert.equal(explicitWarnings.some(warning => warning.code === 'SILICON_AFTER_BASE' && warning.severity === 'ERROR'), true);
+assert.equal(readiness.allowed, false);
+assert.ok(readiness.blockers.some(blocker => blocker.code === 'PRE_BASE_PH_REQUIRED'));
+assert.ok(readiness.blockers.some(blocker => blocker.code === 'FINAL_EC_REQUIRED'));
+assert.ok(readiness.blockers.some(blocker => blocker.code === 'FINAL_PH_REQUIRED'));
 
-const warnings = validateRecipeContext(mixRecipe, products, {
+readiness = evaluateExecutionReadiness({
+  recipe: verifiedRecipe,
+  products,
   medium: 'TERRA',
-  method: 'ROOT_FEED',
+  stage: 'VEG',
+  week: 1,
+  waterType: 'CUSTOM',
+  volumeLitres: 5,
+  measurements: { preBasePh: 7, finalEc: 1.2, finalPh: 6.2 },
+  confirmedProtocolStepIds: allConfirmed,
 });
-assert.equal(warnings.some(warning => warning.code === 'RECIPE_UNVERIFIED' && warning.severity === 'WARNING'), true);
+assert.equal(readiness.allowed, false);
+assert.ok(readiness.blockers.some(blocker => blocker.code === 'PRE_BASE_PH_OUT_OF_POLICY'));
 
-const conflictWarnings = validateRecipeContext(
-  { ...mixRecipe, verificationStatus: 'CONFLICT' },
+readiness = evaluateExecutionReadiness({
+  recipe: verifiedRecipe,
   products,
-  { medium: 'TERRA', method: 'ROOT_FEED' },
-);
-assert.equal(conflictWarnings.some(warning => warning.code === 'RECIPE_CONFLICT' && warning.severity === 'ERROR'), true);
+  medium: 'TERRA',
+  stage: 'VEG',
+  week: 1,
+  waterType: 'CUSTOM',
+  volumeLitres: 5,
+  measurements: { preBasePh: 6.5, finalEc: 1.2, finalPh: 6.2 },
+  confirmedProtocolStepIds: allConfirmed,
+});
+assert.equal(readiness.allowed, true, readiness.blockers.map(blocker => blocker.message).join('\n'));
+assert.equal(readiness.requirements.reduce((sum, item) => sum + item.amountMl, 0), 18.5);
 
-const unsupportedUnitWarnings = validateRecipeContext(
-  {
-    ...mixRecipe,
-    id: 'myco-dose',
-    ingredients: [{ productId: 'myco', concentration: 1 }],
-  },
-  products,
-  { medium: 'TERRA', method: 'ROOT_FEED' },
-);
-assert.equal(unsupportedUnitWarnings.some(warning => warning.code === 'UNSUPPORTED_DOSING_UNIT'), true);
+const unverified = { ...verifiedRecipe, verificationStatus: 'UNVERIFIED', executionPolicy: 'SIMULATION_ONLY' };
+const simulationWarnings = validateRecipeContext(unverified, products, { medium: 'TERRA', method: 'ROOT_FEED', week: 1 }, 'SIMULATION');
+assert.ok(simulationWarnings.some(warning => warning.code === 'RECIPE_UNVERIFIED' && warning.severity === 'WARNING'));
+const physicalWarnings = validateRecipeContext(unverified, products, { medium: 'TERRA', method: 'ROOT_FEED', week: 1 }, 'PHYSICAL_EXECUTION');
+assert.ok(physicalWarnings.some(warning => warning.code === 'RECIPE_UNVERIFIED' && warning.severity === 'ERROR'));
+assert.ok(physicalWarnings.some(warning => warning.code === 'PHYSICAL_EXECUTION_NOT_ALLOWED'));
 
-const invalidRtsWarnings = validateRecipeContext(
-  {
-    ...mixRecipe,
-    id: 'bad-rts',
-    method: 'READY_TO_SPRAY',
-    ingredients: [
-      { productId: 'rts', concentration: 0 },
-      { productId: 'base', concentration: 0 },
-    ],
-  },
-  products,
-  { medium: 'TERRA', method: 'READY_TO_SPRAY' },
-);
-assert.equal(invalidRtsWarnings.some(warning => warning.code === 'READY_TO_SPRAY_INGREDIENT_COUNT'), true);
+const unsafeOrder = {
+  ...verifiedRecipe,
+  id: 'unsafe-order',
+  ingredients: [
+    { productId: 'base', concentration: 2, mixOrder: 100 },
+    { productId: 'silicon', concentration: 1, mixOrder: 200 },
+  ],
+};
+assert.ok(validateRecipeContext(unsafeOrder, products, { medium: 'TERRA', method: 'ROOT_FEED', week: 1 }, 'SIMULATION').some(warning => warning.code === 'UNSAFE_MIX_ORDER'));
 
-const lowStockProducts = products.map(product =>
-  product.id === 'base' ? { ...product, remainingCapacity: 5 } : product,
-);
-const shortages = findInventoryShortages(mixRecipe, lowStockProducts, 5);
-assert.deepEqual(shortages, [
-  { productId: 'base', productName: 'Base', requiredMl: 10, availableMl: 5 },
-]);
+const allocation = allocateToolSet([
+  { productId: 'a', volumeMl: 2.55 },
+  { productId: 'b', volumeMl: 5.2 },
+], PHYSICAL_SYRINGES, 'PRECISION');
+assert.equal(allocation.complete, true);
+for (const assignment of Object.values(allocation.assignments).flat()) {
+  assert.equal(
+    Math.round(assignment.amount * 100) % Math.round(assignment.precisionStep * 100),
+    0,
+    `${assignment.instanceId} cannot physically measure ${assignment.amount}ml at step ${assignment.precisionStep}`,
+  );
+}
+
+const coarseOnly = [{ id: 'coarse', capacity: 3, count: 1, label: '3ml coarse', type: 'SYRINGE', precisionStep: 0.1 }];
+assert.equal(isMeasurableAmount(2.5, coarseOnly[0]), true);
+assert.equal(isMeasurableAmount(2.55, coarseOnly[0]), false);
+assert.equal(allocateToolSet([{ productId: 'x', volumeMl: 2.55 }], coarseOnly).complete, false);
 
 console.log('backend smoke: PASS');

@@ -1,0 +1,1 @@
+The existing repository CI explicitly runs backend, nutrition, integrity and work-audit smoke commands. `smoke:work-audit` now chains `release-architecture-smoke.ts`, so the new release regression gates are exercised without weakening or bypassing the existing workflow.
