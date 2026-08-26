@@ -1,4 +1,9 @@
 import { evaluateExecutionReadiness, type ExecutionBlocker } from './executionPolicy';
+import {
+  samePlanIdentity,
+  validatePlanSnapshot,
+  type PlanSnapshot,
+} from './planSnapshot';
 import type {
   ExecutionMeasurements,
   GrowthStage,
@@ -32,10 +37,9 @@ export interface ExecuteOperationContext {
 /**
  * Contract boundary for one physical execution attempt.
  *
- * planSnapshotId/planSnapshotHash are opaque identifiers in this P0 slice.
- * Their semantic generation/verification belongs to the immutable PlanSnapshot
- * work; this boundary already requires and persists them so callers cannot
- * silently omit snapshot identity.
+ * The caller supplies only snapshot identity. The authoritative PlanSnapshot is
+ * loaded from ExecuteOperationState and verified before any readiness, stock,
+ * history or persistence mutation is allowed.
  */
 export interface ExecuteOperationRequest {
   operationId: string;
@@ -60,6 +64,7 @@ export interface ExecuteOperationState {
   stateRevision: number;
   inventory: Product[];
   recipes: Recipe[];
+  planSnapshots: PlanSnapshot[];
   history: HistoryItem[];
   receipts: OperationReceipt[];
   currentMedium: Medium;
@@ -74,9 +79,16 @@ export type ExecuteOperationBlocker =
         | 'INVALID_STATE_REVISION'
         | 'INVALID_PLAN_SNAPSHOT_ID'
         | 'INVALID_PLAN_SNAPSHOT_HASH'
+        | 'UNKNOWN_PLAN_SNAPSHOT'
+        | 'PLAN_SNAPSHOT_INVALID'
+        | 'PLAN_SNAPSHOT_HASH_MISMATCH'
+        | 'PLAN_CONTEXT_MISMATCH'
+        | 'PLAN_NOT_EXECUTABLE'
         | 'OPERATION_ID_COLLISION'
         | 'STAGE_MISMATCH'
         | 'CONTEXT_MISMATCH'
+        | 'INVALID_VOLUME'
+        | 'INVALID_READY_TO_USE_VOLUME'
         | 'INVENTORY_SHORTAGE';
       message: string;
     };
@@ -107,8 +119,11 @@ export interface ExecuteOperationDependencies {
  * Single-operation transaction boundary.
  *
  * Invariants in this P0 slice:
- * - duplicate operationId is idempotent after durable commit;
+ * - duplicate operationId is idempotent only for an identical request fingerprint;
  * - stale state fails closed before inventory/history mutation;
+ * - snapshot identity, semantic hash and source state revision are authoritative;
+ * - caller context must match the stored immutable snapshot;
+ * - only GO + PHYSICAL_ALLOWED + VERIFIED recipe state may continue;
  * - selected stage must match the recipe stage (or recipe ALL);
  * - inventory requirements are aggregated per productId;
  * - inventory + history + receipt + stateRevision are committed as one state;
@@ -151,8 +166,8 @@ export function executeOperation(
     return {
       status: 'ALREADY_COMMITTED',
       blockers: [],
-      receipt: previousReceipt,
-      historyItem: current.history.find(item => item.id === previousReceipt.historyItemId),
+      receipt: { ...previousReceipt },
+      historyItem: cloneHistoryItem(current.history.find(item => item.id === previousReceipt.historyItemId)),
       actualStateRevision: current.stateRevision,
     };
   }
@@ -163,6 +178,71 @@ export function executeOperation(
       blockers: [{
         code: 'CONTEXT_MISMATCH',
         message: `Stan zmienił się od utworzenia planu: oczekiwano rewizji ${request.expectedStateRevision}, aktualna to ${current.stateRevision}.`,
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  const authoritativeSnapshot = current.planSnapshots.find(snapshot => snapshot.planId === request.planSnapshotId);
+  if (!authoritativeSnapshot) {
+    return {
+      status: 'REJECTED',
+      blockers: [{ code: 'UNKNOWN_PLAN_SNAPSHOT', message: 'Nie znaleziono autorytatywnego PlanSnapshot dla tego wykonania.' }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  const snapshotIssues = validatePlanSnapshot(authoritativeSnapshot);
+  if (snapshotIssues.length) {
+    return {
+      status: 'REJECTED',
+      blockers: snapshotIssues.map(issue => ({
+        code: 'PLAN_SNAPSHOT_INVALID' as const,
+        message: `${issue.code}: ${issue.message}`,
+      })),
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  if (authoritativeSnapshot.contentHash !== request.planSnapshotHash) {
+    return {
+      status: 'REJECTED',
+      blockers: [{
+        code: 'PLAN_SNAPSHOT_HASH_MISMATCH',
+        message: 'planSnapshotHash żądania nie odpowiada autorytatywnemu snapshotowi.',
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  if (authoritativeSnapshot.sourceStateRevision !== request.expectedStateRevision) {
+    return {
+      status: 'STALE_STATE',
+      blockers: [{
+        code: 'CONTEXT_MISMATCH',
+        message: `PlanSnapshot powstał dla rewizji ${authoritativeSnapshot.sourceStateRevision}, a żądanie oczekuje ${request.expectedStateRevision}.`,
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  if (!snapshotMatchesRequest(authoritativeSnapshot, request)) {
+    return {
+      status: 'REJECTED',
+      blockers: [{
+        code: 'PLAN_CONTEXT_MISMATCH',
+        message: 'Kontekst wykonania różni się od autorytatywnego PlanSnapshot.',
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  if (authoritativeSnapshot.verdict !== 'GO' || authoritativeSnapshot.capability !== 'PHYSICAL_ALLOWED') {
+    return {
+      status: 'REJECTED',
+      blockers: [{
+        code: 'PLAN_NOT_EXECUTABLE',
+        message: `Plan ma verdict=${authoritativeSnapshot.verdict} i capability=${authoritativeSnapshot.capability}; fizyczne wykonanie jest zabronione.`,
       }],
       actualStateRevision: current.stateRevision,
     };
@@ -188,6 +268,34 @@ export function executeOperation(
     };
   }
 
+  if (
+    authoritativeSnapshot.recipeId !== recipe.id
+    || authoritativeSnapshot.method !== recipe.method
+    || authoritativeSnapshot.recipeVerificationStatus !== recipe.verificationStatus
+    || authoritativeSnapshot.recipeExecutionPolicy !== recipe.executionPolicy
+    || (authoritativeSnapshot.recipeSourceVersion ?? null) !== (recipe.sourceVersion ?? null)
+  ) {
+    return {
+      status: 'REJECTED',
+      blockers: [{
+        code: 'PLAN_CONTEXT_MISMATCH',
+        message: 'Recipe authority/provenance zmieniło się od utworzenia PlanSnapshot.',
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  if (recipe.verificationStatus !== 'VERIFIED' || recipe.executionPolicy !== 'PHYSICAL_ALLOWED') {
+    return {
+      status: 'REJECTED',
+      blockers: [{
+        code: 'PLAN_NOT_EXECUTABLE',
+        message: 'Aktualna receptura nie ma VERIFIED + PHYSICAL_ALLOWED.',
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
   if (String(recipe.stage) !== 'ALL' && recipe.stage !== request.context.stage) {
     return {
       status: 'REJECTED',
@@ -195,6 +303,22 @@ export function executeOperation(
         code: 'STAGE_MISMATCH',
         message: `Wybrany etap ${request.context.stage} nie odpowiada etapowi receptury ${recipe.stage}.`,
       }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
+  if (String(recipe.method) === 'READY_TO_SPRAY') {
+    if (!Number.isFinite(request.context.readyToUseVolumeMl) || (request.context.readyToUseVolumeMl ?? 0) <= 0) {
+      return {
+        status: 'REJECTED',
+        blockers: [{ code: 'INVALID_READY_TO_USE_VOLUME', message: 'READY_TO_SPRAY wymaga dodatniej, skończonej objętości ml.' }],
+        actualStateRevision: current.stateRevision,
+      };
+    }
+  } else if (!Number.isFinite(request.context.volumeLitres) || request.context.volumeLitres <= 0) {
+    return {
+      status: 'REJECTED',
+      blockers: [{ code: 'INVALID_VOLUME', message: 'Objętość wykonania musi być dodatnią, skończoną liczbą litrów.' }],
       actualStateRevision: current.stateRevision,
     };
   }
@@ -221,6 +345,17 @@ export function executeOperation(
   }
 
   const requirements = aggregateRequirements(readiness.requirements);
+  if (!snapshotMatchesRequirements(authoritativeSnapshot, requirements, current.inventory)) {
+    return {
+      status: 'REJECTED',
+      blockers: [{
+        code: 'PLAN_CONTEXT_MISMATCH',
+        message: 'Dawki wynikające z bieżącej receptury nie odpowiadają dawkom zapisanym w PlanSnapshot.',
+      }],
+      actualStateRevision: current.stateRevision,
+    };
+  }
+
   const stockBlockers: ExecuteOperationBlocker[] = [];
   for (const [productId, amountMl] of requirements) {
     const product = current.inventory.find(item => item.id === productId);
@@ -273,8 +408,8 @@ export function executeOperation(
   const nextRevision = current.stateRevision + 1;
   const receipt: OperationReceipt = {
     operationId: request.operationId,
-    planSnapshotId: request.planSnapshotId,
-    planSnapshotHash: request.planSnapshotHash,
+    planSnapshotId: authoritativeSnapshot.planId,
+    planSnapshotHash: authoritativeSnapshot.contentHash,
     requestFingerprint: fingerprint,
     recipeId: recipe.id,
     historyItemId,
@@ -289,10 +424,12 @@ export function executeOperation(
       const amount = requirements.get(product.id) ?? 0;
       return amount > 0
         ? { ...product, remainingCapacity: roundMl(product.remainingCapacity - amount) }
-        : product;
+        : { ...product };
     }),
-    history: [historyItem, ...current.history],
-    receipts: [receipt, ...current.receipts],
+    recipes: current.recipes.map(cloneRecipe),
+    planSnapshots: current.planSnapshots.map(clonePlanSnapshot),
+    history: [historyItem, ...current.history.map(item => cloneHistoryItem(item) as HistoryItem)],
+    receipts: [receipt, ...current.receipts.map(item => ({ ...item }))],
   };
 
   try {
@@ -311,9 +448,9 @@ export function executeOperation(
   return {
     status: 'COMMITTED',
     blockers: [],
-    receipt,
-    historyItem,
-    committedState: nextState,
+    receipt: { ...receipt },
+    historyItem: cloneHistoryItem(historyItem),
+    committedState: cloneExecuteOperationState(nextState),
     actualStateRevision: nextState.stateRevision,
   };
 }
@@ -335,10 +472,39 @@ function validateRequest(request: ExecuteOperationRequest): ExecuteOperationBloc
   return blockers;
 }
 
+function snapshotMatchesRequest(snapshot: PlanSnapshot, request: ExecuteOperationRequest): boolean {
+  return snapshot.recipeId === request.context.recipeId
+    && snapshot.stage === request.context.stage
+    && (snapshot.week ?? null) === (request.context.week ?? null)
+    && snapshot.medium === request.context.medium
+    && snapshot.waterContext.waterType === request.context.waterType
+    && sameNumber(snapshot.volumeLitres, request.context.volumeLitres)
+    && sameOptionalNumber(snapshot.readyToUseVolumeMl, request.context.readyToUseVolumeMl)
+    && sameStringSet(snapshot.canonicalStepIds, request.context.confirmedProtocolStepIds);
+}
+
+function snapshotMatchesRequirements(
+  snapshot: PlanSnapshot,
+  requirements: Map<string, number>,
+  products: Product[],
+): boolean {
+  if (snapshot.doseLines.length !== requirements.size) return false;
+
+  for (const line of snapshot.doseLines) {
+    const product = products.find(item => item.id === line.productId);
+    if (!product || product.unit !== line.unit) return false;
+    const required = requirements.get(line.productId);
+    if (required === undefined || !sameNumber(roundMl(line.calculatedAmount), roundMl(required))) return false;
+  }
+
+  return true;
+}
+
 function buildRequestFingerprint(request: ExecuteOperationRequest): string {
   return JSON.stringify({
     planSnapshotId: request.planSnapshotId,
     planSnapshotHash: request.planSnapshotHash,
+    expectedStateRevision: request.expectedStateRevision,
     recipeId: request.context.recipeId,
     stage: request.context.stage,
     week: request.context.week ?? null,
@@ -351,7 +517,7 @@ function buildRequestFingerprint(request: ExecuteOperationRequest): string {
       finalEc: request.context.measurements.finalEc ?? null,
       finalPh: request.context.measurements.finalPh ?? null,
     },
-    confirmedProtocolStepIds: [...request.context.confirmedProtocolStepIds],
+    confirmedProtocolStepIds: [...request.context.confirmedProtocolStepIds].sort(),
   });
 }
 
@@ -380,6 +546,67 @@ function toolAudit(
       precisionStep: tool.precisionStep,
     })),
   );
+}
+
+function cloneExecuteOperationState(state: ExecuteOperationState): ExecuteOperationState {
+  return {
+    ...state,
+    inventory: state.inventory.map(product => ({
+      ...product,
+      compatibleMedia: [...product.compatibleMedia],
+    })),
+    recipes: state.recipes.map(cloneRecipe),
+    planSnapshots: state.planSnapshots.map(clonePlanSnapshot),
+    history: state.history.map(item => cloneHistoryItem(item) as HistoryItem),
+    receipts: state.receipts.map(receipt => ({ ...receipt })),
+  };
+}
+
+function cloneRecipe(recipe: Recipe): Recipe {
+  return {
+    ...recipe,
+    medium: [...recipe.medium],
+    waterProfiles: recipe.waterProfiles ? [...recipe.waterProfiles] : undefined,
+    ingredients: recipe.ingredients.map(ingredient => ({ ...ingredient })),
+  };
+}
+
+function clonePlanSnapshot(snapshot: PlanSnapshot): PlanSnapshot {
+  return {
+    ...snapshot,
+    waterContext: { ...snapshot.waterContext },
+    blockers: [...snapshot.blockers],
+    doseLines: snapshot.doseLines.map(line => ({ ...line })),
+    canonicalStepIds: [...snapshot.canonicalStepIds],
+  };
+}
+
+function cloneHistoryItem(item: HistoryItem | undefined): HistoryItem | undefined {
+  if (!item) return undefined;
+  return {
+    ...item,
+    doses: { ...item.doses },
+    measurements: item.measurements ? { ...item.measurements } : undefined,
+    tools: item.tools ? item.tools.map(tool => ({ ...tool })) : undefined,
+    confirmedProtocolStepIds: item.confirmedProtocolStepIds ? [...item.confirmedProtocolStepIds] : undefined,
+  };
+}
+
+function sameStringSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((value, index) => value === right[index]);
+}
+
+function sameNumber(a: number, b: number): boolean {
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 1e-9;
+}
+
+function sameOptionalNumber(a?: number, b?: number): boolean {
+  if (a === undefined && b === undefined) return true;
+  if (a === undefined || b === undefined) return false;
+  return sameNumber(a, b);
 }
 
 function safeToken(value: unknown): boolean {
