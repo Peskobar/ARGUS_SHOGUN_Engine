@@ -38,6 +38,9 @@ export interface ExecutionBlocker {
     | 'FINAL_EC_REQUIRED'
     | 'FINAL_PH_REQUIRED'
     | 'INVALID_MEASUREMENT'
+    | 'INVALID_VOLUME'
+    | 'DUPLICATE_PRODUCT_ID'
+    | 'UNIT_MISMATCH'
     | 'INVENTORY_SHORTAGE'
     | 'TOOL_SHORTAGE'
     | 'READY_TO_USE_VOLUME_REQUIRED';
@@ -72,6 +75,40 @@ export function evaluateExecutionReadiness(input: ExecutionReadinessInput): Exec
     blockers.push({ code: 'RECIPE_VALIDATION', message: warning.message });
   }
 
+  const seenProductIds = new Set<string>();
+  for (const ingredient of input.recipe.ingredients) {
+    if (seenProductIds.has(ingredient.productId)) {
+      blockers.push({
+        code: 'DUPLICATE_PRODUCT_ID',
+        message: `Receptura zawiera powtórzony productId: ${ingredient.productId}.`,
+      });
+    }
+    seenProductIds.add(ingredient.productId);
+
+    const product = input.products.find(item => item.id === ingredient.productId);
+    if (product && product.unit !== 'ml') {
+      blockers.push({
+        code: 'UNIT_MISMATCH',
+        message: `${product.name}: bieżący silnik fizycznego wykonania obsługuje wyłącznie ml; jednostka ${product.unit} wymaga osobnego konwertera/silnika.`,
+      });
+    }
+  }
+
+  const isReadyToSpray = String(input.recipe.method) === 'READY_TO_SPRAY';
+  if (isReadyToSpray) {
+    if (!Number.isFinite(input.readyToUseVolumeMl) || (input.readyToUseVolumeMl ?? 0) <= 0) {
+      blockers.push({
+        code: 'READY_TO_USE_VOLUME_REQUIRED',
+        message: 'Podaj rzeczywistą dodatnią ilość zużywanego produktu READY_TO_SPRAY.',
+      });
+    }
+  } else if (!Number.isFinite(input.volumeLitres) || input.volumeLitres <= 0) {
+    blockers.push({
+      code: 'INVALID_VOLUME',
+      message: 'Objętość wykonania musi być dodatnią, skończoną liczbą litrów.',
+    });
+  }
+
   const confirmed = new Set(input.confirmedProtocolStepIds);
   for (const step of protocol) {
     if (!confirmed.has(step.id)) {
@@ -84,9 +121,9 @@ export function evaluateExecutionReadiness(input: ExecutionReadinessInput): Exec
 
   validateMeasurements(protocol, input.measurements, blockers);
 
-  const isReadyToSpray = String(input.recipe.method) === 'READY_TO_SPRAY';
   const productSteps = buildExecutionSteps(input.recipe, input.products);
-  const requests = isReadyToSpray
+  const validRootVolume = !isReadyToSpray && Number.isFinite(input.volumeLitres) && input.volumeLitres > 0;
+  const requests = isReadyToSpray || !validRootVolume
     ? []
     : productSteps
         .filter(step => step.ingredient.concentration > 0 && step.product.unit === 'ml')
@@ -108,12 +145,7 @@ export function evaluateExecutionReadiness(input: ExecutionReadinessInput): Exec
   let requirements: Array<{ productId: string; amountMl: number }> = [];
   if (isReadyToSpray) {
     const directMl = input.readyToUseVolumeMl ?? 0;
-    if (!Number.isFinite(directMl) || directMl <= 0) {
-      blockers.push({
-        code: 'READY_TO_USE_VOLUME_REQUIRED',
-        message: 'Podaj rzeczywistą ilość zużywanego produktu READY_TO_SPRAY.',
-      });
-    } else if (productSteps.length === 1) {
+    if (Number.isFinite(directMl) && directMl > 0 && productSteps.length === 1) {
       const product = productSteps[0].product;
       if (product.remainingCapacity + 0.005 < directMl) {
         blockers.push({
@@ -123,7 +155,7 @@ export function evaluateExecutionReadiness(input: ExecutionReadinessInput): Exec
       }
       requirements = [{ productId: product.id, amountMl: roundMl(directMl) }];
     }
-  } else {
+  } else if (validRootVolume) {
     for (const shortage of findInventoryShortages(input.recipe, input.products, input.volumeLitres)) {
       blockers.push({
         code: 'INVENTORY_SHORTAGE',
