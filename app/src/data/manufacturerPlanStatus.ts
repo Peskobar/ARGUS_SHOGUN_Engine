@@ -1,24 +1,32 @@
-import type { GrowthPhase } from '../domain/types.ts';
+import type { PlanContext } from '../domain/types.ts';
 
 export interface ManufacturerPlanStatus {
-  phase: GrowthPhase;
   available: false;
+  contextReady: boolean;
   evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2';
   reason: string;
 }
 
-const REASONS: Record<GrowthPhase, string> = {
-  SEEDLING: 'Oficjalne dane harmonogramu istnieją, ale profil producenta nie został jeszcze odwzorowany do jednego zweryfikowanego kontekstu runtime.',
-  VEG: 'Oficjalny feedchart jest zależny od tygodnia fazy, profilu wody i profilu karmienia. Tego kontekstu runtime jeszcze nie przechowuje.',
-  FLOWER: 'Oficjalny feedchart jest zależny od tygodnia fazy, profilu wody i profilu karmienia. Tego kontekstu runtime jeszcze nie przechowuje.',
-  FLUSH: 'Oficjalny harmonogram przewiduje końcowy tydzień tylko na wodzie, ale V1 nie reprezentuje jeszcze takiego planu jako wykonywalnego wariantu Producent.',
-};
+export function getManufacturerPlanStatus(context: PlanContext): ManufacturerPlanStatus {
+  const missing: string[] = [];
 
-export function getManufacturerPlanStatus(phase: GrowthPhase): ManufacturerPlanStatus {
+  if (!Number.isInteger(context.phaseWeek) || (context.phaseWeek ?? 0) < 1) missing.push('tydzień fazy');
+  if (!context.waterProfile) missing.push('profil wody');
+  if (!context.scheduleProfile) missing.push('profil karmienia');
+
+  if (missing.length > 0) {
+    return {
+      available: false,
+      contextReady: false,
+      evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2',
+      reason: `Uzupełnij: ${missing.join(', ')}.`,
+    };
+  }
+
   return {
-    phase,
     available: false,
+    contextReady: true,
     evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2',
-    reason: REASONS[phase],
+    reason: 'Kontekst producenta jest kompletny. Dokładny harmonogram dawek nie został jeszcze promowany do runtime.',
   };
 }
