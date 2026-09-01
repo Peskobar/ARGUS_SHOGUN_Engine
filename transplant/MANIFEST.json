@@ -28,6 +28,12 @@
     {
       "path": "algorithms/recipe-pure-functions",
       "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts",
+      "status": "PROMOTED_ALGORITHM",
+      "promotedTo": "app/src/domain/recipeKernel.ts"
+    },
+    {
+      "path": "algorithms/mixing-checkpoint-policy",
+      "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts",
       "status": "REVIEW_REQUIRED"
     }
   ],
