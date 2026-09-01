@@ -2,11 +2,15 @@ import { createContext, useContext, useMemo, useState, type PropsWithChildren } 
 import { buildPlanVariants, getCycleDay, validatePlanForExecution } from '../domain/planEngine.ts';
 import {
   GROWTH_PHASES,
+  SCHEDULE_PROFILES,
+  WATER_PROFILES,
   type AppState,
   type ControlMode,
   type GrowthPhase,
   type PlanId,
   type PlanVariant,
+  type ScheduleProfile,
+  type WaterProfile,
 } from '../domain/types.ts';
 
 const STORAGE_KEY = 'argus-shogun-v1-state';
@@ -16,6 +20,9 @@ const createInitialState = (): AppState => ({
   batchLiters: 10,
   cycleStartDate: new Date().toISOString().slice(0, 10),
   phase: 'SEEDLING',
+  phaseWeek: null,
+  waterProfile: null,
+  scheduleProfile: null,
   selectedPlanId: 'balanced',
   mixerStep: 0,
   history: [],
@@ -40,11 +47,23 @@ function loadState(): AppState {
     const phase = GROWTH_PHASES.includes(parsed.phase as GrowthPhase)
       ? (parsed.phase as GrowthPhase)
       : initial.phase;
+    const phaseWeek = Number.isInteger(parsed.phaseWeek) && (parsed.phaseWeek ?? 0) > 0
+      ? parsed.phaseWeek as number
+      : null;
+    const waterProfile = WATER_PROFILES.includes(parsed.waterProfile as WaterProfile)
+      ? (parsed.waterProfile as WaterProfile)
+      : null;
+    const scheduleProfile = SCHEDULE_PROFILES.includes(parsed.scheduleProfile as ScheduleProfile)
+      ? (parsed.scheduleProfile as ScheduleProfile)
+      : null;
 
     return {
       ...initial,
       ...parsed,
       phase,
+      phaseWeek,
+      waterProfile,
+      scheduleProfile,
       selectedPlanId: parsed.selectedPlanId === 'manufacturer' ? null : (parsed.selectedPlanId ?? initial.selectedPlanId),
       pots: parsed.pots,
       history: parsed.history,
@@ -62,6 +81,9 @@ interface StoreValue {
   setBatchLiters: (liters: number) => void;
   setCycleStartDate: (date: string) => void;
   setPhase: (phase: GrowthPhase) => void;
+  setPhaseWeek: (week: number | null) => void;
+  setWaterProfile: (profile: WaterProfile) => void;
+  setScheduleProfile: (profile: ScheduleProfile) => void;
   selectPlan: (id: PlanId) => void;
   setMixerStep: (step: number) => void;
   recordPotWeight: (id: AppState['pots'][number]['id'], kg: number) => void;
@@ -88,8 +110,15 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
 
   const cycleDay = getCycleDay(state.cycleStartDate);
   const plans = useMemo(
-    () => buildPlanVariants({ batchLiters: state.batchLiters, cycleDay, phase: state.phase }),
-    [state.batchLiters, cycleDay, state.phase],
+    () => buildPlanVariants({
+      batchLiters: state.batchLiters,
+      cycleDay,
+      phase: state.phase,
+      phaseWeek: state.phaseWeek,
+      waterProfile: state.waterProfile,
+      scheduleProfile: state.scheduleProfile,
+    }),
+    [state.batchLiters, cycleDay, state.phase, state.phaseWeek, state.waterProfile, state.scheduleProfile],
   );
   const selectedPlan = plans.find((plan) => plan.id === state.selectedPlanId);
 
@@ -100,7 +129,13 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
     setControlMode: (controlMode) => commit((current) => ({ ...current, controlMode })),
     setBatchLiters: (batchLiters) => commit((current) => ({ ...current, batchLiters })),
     setCycleStartDate: (cycleStartDate) => commit((current) => ({ ...current, cycleStartDate })),
-    setPhase: (phase) => commit((current) => ({ ...current, phase, mixerStep: 0 })),
+    setPhase: (phase) => commit((current) => ({ ...current, phase, phaseWeek: null, mixerStep: 0 })),
+    setPhaseWeek: (phaseWeek) => {
+      if (phaseWeek !== null && (!Number.isInteger(phaseWeek) || phaseWeek < 1 || phaseWeek > 12)) return;
+      commit((current) => ({ ...current, phaseWeek, mixerStep: 0 }));
+    },
+    setWaterProfile: (waterProfile) => commit((current) => ({ ...current, waterProfile, mixerStep: 0 })),
+    setScheduleProfile: (scheduleProfile) => commit((current) => ({ ...current, scheduleProfile, mixerStep: 0 })),
     selectPlan: (selectedPlanId) => {
       const candidate = plans.find((plan) => plan.id === selectedPlanId);
       if (!candidate?.selectable) return;
