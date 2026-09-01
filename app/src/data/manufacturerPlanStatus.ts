@@ -11,8 +11,11 @@ export function getManufacturerPlanStatus(context: PlanContext): ManufacturerPla
   const missing: string[] = [];
 
   if (!Number.isInteger(context.phaseWeek) || (context.phaseWeek ?? 0) < 1) missing.push('tydzień fazy');
-  if (!context.waterProfile) missing.push('profil wody');
-  if (!context.scheduleProfile) missing.push('profil karmienia');
+
+  if (context.phase !== 'FLUSH') {
+    if (!context.waterProfile) missing.push('profil wody');
+    if (!context.scheduleProfile) missing.push('profil karmienia');
+  }
 
   if (missing.length > 0) {
     return {
