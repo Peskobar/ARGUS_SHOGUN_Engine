@@ -1,0 +1,19 @@
+{
+  "status": "QUARANTINED_UNVERIFIED",
+  "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/data.ts",
+  "reason": "These values mix product claims, compatibility assumptions, UI metadata and legacy demo inventory. They require evidence or operator confirmation before use.",
+  "claims": [
+    {"productId":"shogun-start","foliarAllowed":false,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"samurai-terra-grow","foliarAllowed":false,"compatibleMedia":["TERRA"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"samurai-terra-bloom","foliarAllowed":false,"compatibleMedia":["TERRA"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"katana-roots","foliarAllowed":true,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":250,"legacyRemainingCapacity":250},
+    {"productId":"zenzym","foliarAllowed":false,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"silicon","foliarAllowed":false,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"calmag","foliarAllowed":true,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"sumo-active-boost","foliarAllowed":true,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"pk-warrior","foliarAllowed":false,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":1000,"legacyRemainingCapacity":1000},
+    {"productId":"geisha-foliar","foliarAllowed":true,"compatibleMedia":["TERRA","COCO","HYDRO"],"legacyInitialCapacity":750,"legacyRemainingCapacity":750},
+    {"productId":"myco-bio","foliarAllowed":false,"compatibleMedia":["TERRA","COCO"],"legacyInitialCapacity":100,"legacyRemainingCapacity":100}
+  ],
+  "discardedAsDomainData": ["Tailwind color classes"]
+}

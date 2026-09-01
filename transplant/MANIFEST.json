@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "project": "ARGUS_SHOGUN",
+  "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
+  "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
+  "extractedAt": "2026-09-01",
+  "packages": [
+    {"path":"candidates/domain-taxonomy.json","status":"READY_STRUCTURE"},
+    {"path":"candidates/product-identities.json","status":"READY_STRUCTURE"},
+    {"path":"candidates/physical-tools.json","status":"NEEDS_OPERATOR_CONFIRMATION"},
+    {"path":"candidates/mixing-policy.json","status":"REVIEW_REQUIRED"},
+    {"path":"quarantine/unverified-recipes.json","status":"QUARANTINED_UNVERIFIED"},
+    {"path":"quarantine/product-claims.json","status":"QUARANTINED_UNVERIFIED"}
+  ],
+  "promotionRule": "No package may be imported by app/src until its status is explicitly promoted and provenance is preserved."
+}

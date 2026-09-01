@@ -1,0 +1,12 @@
+{
+  "status": "READY_STRUCTURE",
+  "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/types.ts",
+  "medium": ["TERRA", "COCO", "HYDRO", "CUSTOM"],
+  "waterType": ["SOFT", "HARD", "RO", "CUSTOM"],
+  "applicationMethod": ["ROOT_FEED", "FOLIAR", "READY_TO_SPRAY", "SOAK", "MEDIA_TREATMENT"],
+  "growthStage": ["SEEDLING", "VEG", "BLOOM", "FLUSH", "ALL"],
+  "mixingRole": ["SILICON", "CALMAG", "BASE", "ROOTS", "ENZYME", "BOOSTER", "PK", "BIOLOGICAL", "READY_TO_USE", "OTHER", "PH_ADJUSTER"],
+  "recipeVerificationStatus": ["UNVERIFIED", "VERIFIED", "CONFLICT"],
+  "allocationMode": ["PRECISION", "SPEED", "MIN_TOOLS"],
+  "executionVolumeUnit": ["L", "ml"]
+}

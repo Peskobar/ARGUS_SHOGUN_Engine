@@ -1,0 +1,12 @@
+{
+  "status": "NEEDS_OPERATOR_CONFIRMATION",
+  "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/data.ts#PHYSICAL_SYRINGES",
+  "warning": "Do not treat counts as current physical inventory until confirmed by operator.",
+  "tools": [
+    {"id":"s20","capacityMl":20,"count":5,"label":"20ml","type":"SYRINGE"},
+    {"id":"s6","capacityMl":6,"count":5,"label":"6ml","type":"SYRINGE"},
+    {"id":"s3","capacityMl":3,"count":5,"label":"3ml","type":"SYRINGE"},
+    {"id":"p3","capacityMl":3,"count":4,"label":"3ml Pipeta","type":"PIPETTE"},
+    {"id":"s1","capacityMl":1,"count":10,"label":"1ml (Insulina)","type":"SYRINGE"}
+  ]
+}

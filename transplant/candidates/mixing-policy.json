@@ -1,0 +1,30 @@
+{
+  "status": "REVIEW_REQUIRED",
+  "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts",
+  "warning": "This is a donor execution policy, not verified manufacturer evidence. Do not convert it into hard operator gates.",
+  "roleOrder": [
+    {"role":"SILICON","weight":100},
+    {"role":"CALMAG","weight":300},
+    {"role":"BASE","weight":400},
+    {"role":"ROOTS","weight":500},
+    {"role":"ENZYME","weight":600},
+    {"role":"BOOSTER","weight":700},
+    {"role":"PK","weight":800},
+    {"role":"BIOLOGICAL","weight":900},
+    {"role":"READY_TO_USE","weight":1000},
+    {"role":"OTHER","weight":1100},
+    {"role":"PH_ADJUSTER","weight":1200}
+  ],
+  "rootFeedCheckpoints": [
+    {"id":"water-start","position":"START","label":"Woda bazowa"},
+    {"id":"post-silicon-ph","position":"AFTER_LAST_SILICON","label":"Wymieszaj i skontroluj pH po Silicon"},
+    {"id":"final-ec","position":"END_BEFORE_FINAL_PH","label":"Pomiar EC"},
+    {"id":"final-ph","position":"END","label":"Końcowa kontrola pH"}
+  ],
+  "legacyInvariantCandidates": [
+    "Explicit mixOrder overrides role order.",
+    "Equal-order ingredients preserve source order.",
+    "ROOT_FEED donor policy places Silicon before BASE.",
+    "Non-ROOT_FEED methods must not inherit ROOT_FEED checkpoints automatically."
+  ]
+}
