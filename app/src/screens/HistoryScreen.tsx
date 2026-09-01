@@ -1,3 +1,4 @@
+import { PHASE_LABELS } from '../domain/types.ts';
 import { useAppStore } from '../store/AppStore.tsx';
 
 export function HistoryScreen() {
@@ -16,6 +17,9 @@ export function HistoryScreen() {
       <div className="history-list">
         {state.history.map((record) => {
           const operatorOverride = record.executionMode === 'OPERATOR_OVERRIDE';
+          const phaseText = record.phase ? PHASE_LABELS[record.phase] : 'starszy zapis';
+          const weekText = record.phaseWeek ? ` · T${record.phaseWeek}` : '';
+          const dayText = record.cycleDay ? ` · Dzień ${record.cycleDay}` : '';
           return (
             <article className="history-card" key={record.id}>
               <div className="history-top">
@@ -23,6 +27,7 @@ export function HistoryScreen() {
                 <span>{record.batchLiters} L</span>
               </div>
               <small>{new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.completedAt))}</small>
+              <small>{phaseText}{weekText}{dayText}</small>
               <small>Tryb: {operatorOverride ? 'OPERATOR' : record.controlMode}</small>
               {operatorOverride ? (
                 <div className="warning">⚠️ {record.executionNote ?? 'Wykonanie operatora. ARGUS nie posiadał pełnych danych składników.'}</div>
