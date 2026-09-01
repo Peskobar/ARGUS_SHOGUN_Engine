@@ -12,7 +12,6 @@ export interface DemoPlanTemplate {
   id: PlanId;
   label: string;
   description: string;
-  recommended: boolean;
   ingredients: DemoIngredientTemplate[];
 }
 
@@ -28,7 +27,6 @@ export const DEMO_PLAN_TEMPLATES: DemoPlanTemplate[] = [
     id: 'manufacturer',
     label: 'Producent',
     description: 'Wariant demonstracyjny reprezentujący profil producenta.',
-    recommended: false,
     ingredients: [
       { ...shared.silicon, amountPer10L: 1 },
       { ...shared.base, amountPer10L: 4 },
@@ -39,8 +37,7 @@ export const DEMO_PLAN_TEMPLATES: DemoPlanTemplate[] = [
   {
     id: 'balanced',
     label: 'Zbalansowany',
-    description: 'Wariant demonstracyjny oznaczony jako domyślnie polecany w UI.',
-    recommended: true,
+    description: 'Wariant demonstracyjny do testowania różnic pomiędzy planami.',
     ingredients: [
       { ...shared.silicon, amountPer10L: 1 },
       { ...shared.base, amountPer10L: 3 },
@@ -52,7 +49,6 @@ export const DEMO_PLAN_TEMPLATES: DemoPlanTemplate[] = [
     id: 'growth',
     label: 'Wzrost',
     description: 'Wariant demonstracyjny do testowania różnic pomiędzy planami.',
-    recommended: false,
     ingredients: [
       { ...shared.silicon, amountPer10L: 1 },
       { ...shared.base, amountPer10L: 3.5 },
