@@ -54,6 +54,7 @@ export function MixerScreen({ navigate }: { navigate: (screen: ScreenId) => void
   }
 
   const last = stepIndex === selectedPlan.ingredients.length - 1;
+  const hasTimer = ingredient.mixSeconds > 0;
 
   const next = () => {
     if (!last) {
@@ -87,15 +88,24 @@ export function MixerScreen({ navigate }: { navigate: (screen: ScreenId) => void
 
       <div className="timer-card">
         <span className="eyebrow">MIESZANIE</span>
-        <div className="timer">{remaining}s</div>
-        <div className="action-row">
-          <button className="primary" disabled={running || remaining === 0} onClick={() => setRunning(true)}>
-            START MIESZANIA
-          </button>
-          <button className="secondary" onClick={() => { setRunning(false); setRemaining(0); }}>
-            POMIŃ TIMER
-          </button>
-        </div>
+        {hasTimer ? (
+          <>
+            <div className="timer">{remaining}s</div>
+            <div className="action-row">
+              <button className="primary" disabled={running || remaining === 0} onClick={() => setRunning(true)}>
+                START MIESZANIA
+              </button>
+              <button className="secondary" onClick={() => { setRunning(false); setRemaining(0); }}>
+                POMIŃ TIMER
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2>Wymieszaj dokładnie</h2>
+            <p className="muted">Brak zweryfikowanego czasu mieszania. ARGUS nie wymyśla timera.</p>
+          </>
+        )}
       </div>
 
       {error ? <div className="blocker">⛔ {error}</div> : null}
