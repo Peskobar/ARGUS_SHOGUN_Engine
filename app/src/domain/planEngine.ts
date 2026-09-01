@@ -1,9 +1,10 @@
 import { DEMO_PLAN_TEMPLATES } from '../data/demoPlans.ts';
-import type { ControlMode, PlanVariant } from './types.ts';
+import type { ControlMode, PlanContext, PlanVariant } from './types.ts';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export function buildPlanVariants(batchLiters: number): PlanVariant[] {
+export function buildPlanVariants(context: PlanContext): PlanVariant[] {
+  const { batchLiters, cycleDay, phase } = context;
   const factor = batchLiters / 10;
 
   return DEMO_PLAN_TEMPLATES.map((template) => ({
@@ -11,6 +12,8 @@ export function buildPlanVariants(batchLiters: number): PlanVariant[] {
     label: template.label,
     description: template.description,
     batchLiters,
+    cycleDay,
+    phase,
     ingredients: template.ingredients.map((ingredient) => ({
       id: ingredient.id,
       name: ingredient.name,
@@ -29,6 +32,10 @@ export function validatePlanForExecution(plan: PlanVariant | undefined): string[
 
   if (!Number.isFinite(plan.batchLiters) || plan.batchLiters <= 0) {
     blockers.push('Objętość partii musi być dodatnią liczbą.');
+  }
+
+  if (!Number.isInteger(plan.cycleDay) || plan.cycleDay < 1) {
+    blockers.push('Dzień cyklu musi być dodatnią liczbą całkowitą.');
   }
 
   if (plan.ingredients.length === 0) blockers.push('Plan nie zawiera składników.');
