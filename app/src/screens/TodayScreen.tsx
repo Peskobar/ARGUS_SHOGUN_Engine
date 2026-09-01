@@ -16,6 +16,8 @@ export function TodayScreen({ navigate }: { navigate: (screen: ScreenId) => void
     .filter((item): item is { id: 'D1' | 'D2' | 'D3' | 'D4'; delta: number } => Boolean(item))
     .sort((a, b) => a.delta - b.delta)[0];
 
+  const selectedLabel = selectedPlan?.selectable ? selectedPlan.label : 'Wybierz dostępny wariant';
+
   return (
     <section className="screen stack-lg">
       <div className="eyebrow">DZISIAJ</div>
@@ -42,7 +44,7 @@ export function TodayScreen({ navigate }: { navigate: (screen: ScreenId) => void
 
       <button className="plan-hero" onClick={() => navigate('plan')}>
         <span className="eyebrow">PLAN NA DZIŚ</span>
-        <strong>{selectedPlan?.label ?? 'Wybierz wariant'}</strong>
+        <strong>{selectedLabel}</strong>
         <span>{state.batchLiters} L · {PHASE_LABELS[state.phase]} · przejdź do planu →</span>
       </button>
     </section>
