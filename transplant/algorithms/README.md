@@ -53,6 +53,24 @@ Status: `PROMOTED_ALGORITHM`.
 ## Kandydat C — mixing/checkpoint policy
 Źródło: `legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts`
 
-To osobna warstwa od recipe kernel. Kolejność ról i checkpointy procesu pozostają danymi/polityką wymagającą osobnego review przed użyciem operatorskim.
+Audyt: `transplant/review/mixing-policy-audit.md`.
 
-Status: `REVIEW_REQUIRED`.
+Po audycie producenta polityka została rozcięta. Promowano wyłącznie:
+- carrier water first,
+- no concentrate premix,
+- Silicon before base,
+- Terra Grow XOR Terra Bloom,
+- końcową checklistę pH + EC bez narzuconej kolejności między pomiarami,
+- separację checkpointów ROOT_FEED od innych metod jako invariant architektoniczny.
+
+Nie promowano:
+- CALMAG -> BASE,
+- BASE -> ROOTS,
+- ROOTS -> ENZYME,
+- ENZYME -> BOOSTER,
+- BOOSTER -> PK,
+- pełnego donor role chain.
+
+Runtime: `app/src/domain/mixingPolicy.ts`.
+
+Status: `PARTIALLY_PROMOTED`.
