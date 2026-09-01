@@ -8,34 +8,43 @@
     {
       "path": "candidates/domain-taxonomy.json",
       "status": "PROMOTED_STRUCTURE",
-      "promotedTo": "app/src/domain/taxonomy.ts"
+      "runtime": "app/src/domain/taxonomy.ts"
     },
     {
       "path": "candidates/product-identities.json",
       "status": "PROMOTED_STRUCTURE",
-      "promotedTo": "app/src/data/referenceCatalog.ts"
+      "runtime": "app/src/data/referenceCatalog.ts"
     },
-    {"path":"candidates/physical-tools.json","status":"NEEDS_OPERATOR_CONFIRMATION"},
-    {"path":"candidates/mixing-policy.json","status":"REVIEW_REQUIRED"},
-    {"path":"quarantine/unverified-recipes.json","status":"QUARANTINED_UNVERIFIED"},
-    {"path":"quarantine/product-claims.json","status":"QUARANTINED_UNVERIFIED"},
     {
-      "path": "algorithms/syringe-allocation",
-      "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/syringeEngine.ts",
+      "path": "candidates/physical-tools.json",
+      "status": "NEEDS_OPERATOR_CONFIRMATION"
+    },
+    {
+      "path": "candidates/mixing-policy.json",
+      "status": "PARTIALLY_PROMOTED",
+      "audit": "transplant/review/mixing-policy-audit.md",
+      "runtime": "app/src/domain/mixingPolicy.ts",
+      "note": "Only evidence-backed subset is promoted. Full donor role chain remains rejected as a default."
+    },
+    {
+      "path": "quarantine/unverified-recipes.json",
+      "status": "QUARANTINED_UNVERIFIED"
+    },
+    {
+      "path": "quarantine/product-claims.json",
+      "status": "QUARANTINED_UNVERIFIED"
+    },
+    {
+      "path": "algorithms/syringe-tool-allocation",
       "status": "PROMOTED_ALGORITHM",
-      "promotedTo": "app/src/domain/toolAllocator.ts"
+      "runtime": "app/src/domain/toolAllocator.ts"
     },
     {
       "path": "algorithms/recipe-pure-functions",
-      "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts",
       "status": "PROMOTED_ALGORITHM",
-      "promotedTo": "app/src/domain/recipeKernel.ts"
-    },
-    {
-      "path": "algorithms/mixing-checkpoint-policy",
-      "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts",
-      "status": "REVIEW_REQUIRED"
+      "runtime": "app/src/domain/recipeKernel.ts",
+      "note": "Role order policy is injected; no hidden donor default is embedded."
     }
   ],
-  "promotionRule": "No package may be imported by app/src until its status is explicitly promoted and provenance is preserved."
+  "promotionRule": "No donor package may influence app runtime unless its exact promoted subset, provenance and runtime destination are recorded here. Domain findings must not become hard operator gates in UNLOCKED mode."
 }
