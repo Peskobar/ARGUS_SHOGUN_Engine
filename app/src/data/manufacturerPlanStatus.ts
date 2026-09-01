@@ -25,6 +25,9 @@ export function getManufacturerPlanStatus(context: PlanContext): ManufacturerPla
 
   if (context.phase === 'VEG' || context.phase === 'FLOWER') {
     if (!context.waterProfile) missing.push('profil wody');
+    if (context.waterProfile === 'CUSTOM' && (!Number.isFinite(context.customWaterEc) || (context.customWaterEc ?? -1) < 0)) {
+      missing.push('EC własnej wody');
+    }
     if (!context.scheduleProfile) missing.push('profil karmienia');
   }
 
