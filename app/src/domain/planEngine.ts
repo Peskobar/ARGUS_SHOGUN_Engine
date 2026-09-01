@@ -14,7 +14,7 @@ export function buildPlanVariants(context: PlanContext): PlanVariant[] {
       return {
         id: template.id,
         label: template.label,
-        description: 'Zweryfikowany plan producenta nie jest jeszcze dostępny dla tej fazy.',
+        description: 'Dane producenta istnieją, ale bieżący kontekst nie wystarcza jeszcze do wyboru jednego harmonogramu.',
         batchLiters,
         cycleDay,
         phase,
@@ -85,7 +85,7 @@ export function getAdvisories(plan: PlanVariant | undefined, mode: ControlMode):
   if (!plan) return [];
 
   if (!plan.selectable) {
-    return [`Brak kompletnego zweryfikowanego planu producenta dla fazy ${plan.phase}.`];
+    return [plan.availabilityReason ?? 'Plan producenta wymaga dodatkowego kontekstu przed wykonaniem.'];
   }
 
   const advisories = ['Dane tego vertical slice są DEMO i nie są zweryfikowaną recepturą producenta.'];
