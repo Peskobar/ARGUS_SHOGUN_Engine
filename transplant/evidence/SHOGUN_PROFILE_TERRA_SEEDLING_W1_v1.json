@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "profileId": "TERRA_SEEDLING_W1_V1",
+  "verifiedAt": "2026-09-01",
+  "runtimeTarget": "app/src/data/manufacturerSchedule.ts",
+  "context": {
+    "nutrientLine": "TERRA",
+    "phase": "SEEDLING",
+    "phaseWeek": 1,
+    "waterProfileRequired": false,
+    "scheduleProfileRequired": false
+  },
+  "ingredients": [
+    {
+      "productId": "shogun-start",
+      "amountPerLiterMl": 4,
+      "status": "VERIFIED",
+      "primarySource": "https://www.shogunfertilisers.com/products/start",
+      "evidence": "Current Product Info states Cuts & Seedlings / Early Veg at 4 ml/L."
+    },
+    {
+      "productId": "katana-roots",
+      "amountPerLiterMl": 5,
+      "status": "VERIFIED",
+      "primarySource": "https://www.shogunfertilisers.com/products/katana-roots",
+      "evidence": "Current Product Info states Cuts & Seedlings: 5 ml/L solution; product page explicitly pairs Katana Roots with Shogun Start for early establishment."
+    }
+  ],
+  "crossCheck": {
+    "source": "https://www.shogunfertilisers.com/media/yhqdxajh/shogun_-_terra_feedchart_new.pdf",
+    "finding": "Official Shogun Terra feedchart shows Start 4 ml/L and Katana Roots 5 ml/L for Cuttings & Seedlings week 1 on both hard-water and soft-water halves.",
+    "note": "The media URL currently redirects through the downloads area; current product pages are the primary evidence for runtime values."
+  },
+  "runtimeRules": [
+    "Exact match only: SEEDLING + phaseWeek 1.",
+    "No nearest-week fallback.",
+    "No interpolation.",
+    "No Light/Standard/Heavy mapping is assumed for this profile.",
+    "No water-profile mapping is assumed for this profile.",
+    "No mixer duration is promoted because the cited sources instruct thorough mixing but do not provide a solution-mixing duration.",
+    "No physical measuring-tool size is promoted until a separate simple tool-selection rule is verified."
+  ]
+}
