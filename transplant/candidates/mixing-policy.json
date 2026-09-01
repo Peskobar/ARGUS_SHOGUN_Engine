@@ -1,30 +1,56 @@
 {
-  "status": "REVIEW_REQUIRED",
+  "status": "PARTIALLY_PROMOTED",
   "source": "legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts",
-  "warning": "This is a donor execution policy, not verified manufacturer evidence. Do not convert it into hard operator gates.",
-  "roleOrder": [
-    {"role":"SILICON","weight":100},
-    {"role":"CALMAG","weight":300},
-    {"role":"BASE","weight":400},
-    {"role":"ROOTS","weight":500},
-    {"role":"ENZYME","weight":600},
-    {"role":"BOOSTER","weight":700},
-    {"role":"PK","weight":800},
-    {"role":"BIOLOGICAL","weight":900},
-    {"role":"READY_TO_USE","weight":1000},
-    {"role":"OTHER","weight":1100},
-    {"role":"PH_ADJUSTER","weight":1200}
+  "audit": "transplant/review/mixing-policy-audit.md",
+  "warning": "The donor full role chain is not verified manufacturer policy and must not be reconstructed as a default runtime order.",
+  "promoted": [
+    {
+      "id": "carrier-water-first",
+      "status": "VERIFIED_MANUFACTURER",
+      "runtime": "app/src/domain/mixingPolicy.ts"
+    },
+    {
+      "id": "no-concentrate-premix",
+      "status": "VERIFIED_MANUFACTURER",
+      "runtime": "app/src/domain/mixingPolicy.ts"
+    },
+    {
+      "id": "silicon-before-base",
+      "status": "VERIFIED_MANUFACTURER",
+      "runtime": "app/src/domain/mixingPolicy.ts"
+    },
+    {
+      "id": "terra-grow-xor-bloom",
+      "status": "VERIFIED_MANUFACTURER",
+      "runtime": "app/src/domain/mixingPolicy.ts"
+    },
+    {
+      "id": "final-ph-and-ec-checklist",
+      "status": "VERIFIED_MANUFACTURER",
+      "runtime": "app/src/domain/mixingPolicy.ts",
+      "note": "pH and EC are required checklist items; their relative order is not asserted."
+    },
+    {
+      "id": "non-root-no-root-checkpoints",
+      "status": "ARCHITECTURAL",
+      "runtime": "app/src/domain/mixingPolicy.ts"
+    }
   ],
-  "rootFeedCheckpoints": [
-    {"id":"water-start","position":"START","label":"Woda bazowa"},
-    {"id":"post-silicon-ph","position":"AFTER_LAST_SILICON","label":"Wymieszaj i skontroluj pH po Silicon"},
-    {"id":"final-ec","position":"END_BEFORE_FINAL_PH","label":"Pomiar EC"},
-    {"id":"final-ph","position":"END","label":"Końcowa kontrola pH"}
+  "notPromoted": [
+    {"relation":"CALMAG -> BASE","status":"UNVERIFIED"},
+    {"relation":"BASE -> ROOTS","status":"UNVERIFIED"},
+    {"relation":"ROOTS -> ENZYME","status":"UNVERIFIED"},
+    {"relation":"ENZYME -> BOOSTER","status":"UNVERIFIED"},
+    {"relation":"BOOSTER -> PK","status":"UNVERIFIED"},
+    {"relation":"full donor role chain","status":"REJECTED_DEFAULT"}
   ],
-  "legacyInvariantCandidates": [
-    "Explicit mixOrder overrides role order.",
-    "Equal-order ingredients preserve source order.",
-    "ROOT_FEED donor policy places Silicon before BASE.",
-    "Non-ROOT_FEED methods must not inherit ROOT_FEED checkpoints automatically."
+  "manufacturerSources": [
+    "https://www.shogunfertilisers.com/products/silicon",
+    "https://www.shogunfertilisers.com/products/calmag",
+    "https://www.shogunfertilisers.com/products/samurai-terra",
+    "https://www.shogunfertilisers.com/products/katana-roots",
+    "https://www.shogunfertilisers.com/products/zenzym",
+    "https://www.shogunfertilisers.com/products/sumo-active-boost",
+    "https://www.shogunfertilisers.com/products/pk-warrior-9-18"
   ]
 }
