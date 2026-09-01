@@ -57,17 +57,16 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
         </div>
       </label>
 
-      <div className="context-card">
+      <div className="plan-card stack-lg">
         <div>
           <div className="eyebrow">KONTEKST PRODUCENTA</div>
           <p className="muted">Tylko dane potrzebne do wybrania właściwego wiersza feedchartu. Aplikacja je zapamiętuje.</p>
         </div>
 
-        <div className="context-grid">
-          <label className="field">
-            <span>Tydzień fazy</span>
+        <label className="field">
+          <span>Tydzień fazy</span>
+          <div className="weight-entry">
             <input
-              className="context-input"
               type="number"
               inputMode="numeric"
               min={1}
@@ -79,42 +78,42 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
                 setPhaseWeek(value === '' ? null : Number(value));
               }}
             />
-          </label>
+          </div>
+        </label>
 
-          {state.phase !== 'FLUSH' ? (
-            <>
-              <label className="field">
-                <span>Woda</span>
-                <div className="liters-control">
-                  {WATER_PROFILES.map((profile) => (
-                    <button
-                      key={profile}
-                      className={state.waterProfile === profile ? 'chip active' : 'chip'}
-                      onClick={() => setWaterProfile(profile)}
-                    >
-                      {WATER_PROFILE_LABELS[profile]}
-                    </button>
-                  ))}
-                </div>
-              </label>
+        {state.phase !== 'FLUSH' ? (
+          <>
+            <label className="field">
+              <span>Woda</span>
+              <div className="liters-control">
+                {WATER_PROFILES.map((profile) => (
+                  <button
+                    key={profile}
+                    className={state.waterProfile === profile ? 'chip active' : 'chip'}
+                    onClick={() => setWaterProfile(profile)}
+                  >
+                    {WATER_PROFILE_LABELS[profile]}
+                  </button>
+                ))}
+              </div>
+            </label>
 
-              <label className="field">
-                <span>Profil karmienia</span>
-                <div className="liters-control">
-                  {SCHEDULE_PROFILES.map((profile) => (
-                    <button
-                      key={profile}
-                      className={state.scheduleProfile === profile ? 'chip active' : 'chip'}
-                      onClick={() => setScheduleProfile(profile)}
-                    >
-                      {SCHEDULE_PROFILE_LABELS[profile]}
-                    </button>
-                  ))}
-                </div>
-              </label>
-            </>
-          ) : null}
-        </div>
+            <label className="field">
+              <span>Profil karmienia</span>
+              <div className="liters-control">
+                {SCHEDULE_PROFILES.map((profile) => (
+                  <button
+                    key={profile}
+                    className={state.scheduleProfile === profile ? 'chip active' : 'chip'}
+                    onClick={() => setScheduleProfile(profile)}
+                  >
+                    {SCHEDULE_PROFILE_LABELS[profile]}
+                  </button>
+                ))}
+              </div>
+            </label>
+          </>
+        ) : null}
       </div>
 
       <div className="plan-grid">
