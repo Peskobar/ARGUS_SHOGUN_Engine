@@ -1,3 +1,4 @@
+import { getCycleCoverage } from '../data/cycleCoverage.ts';
 import {
   GROWTH_PHASES,
   PHASE_LABELS,
@@ -24,6 +25,15 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
   } = useAppStore();
 
   const needsDetailedManufacturerContext = state.phase === 'VEG' || state.phase === 'FLOWER';
+  const coverage = getCycleCoverage({
+    batchLiters: state.batchLiters,
+    cycleDay: plans[0]?.cycleDay ?? 1,
+    phase: state.phase,
+    phaseWeek: state.phaseWeek,
+    waterProfile: state.waterProfile,
+    customWaterEc: state.customWaterEc,
+    scheduleProfile: state.scheduleProfile,
+  });
 
   return (
     <section className="screen stack-lg">
@@ -138,6 +148,10 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
             </label>
           </>
         ) : null}
+
+        <div className={coverage.mode === 'AUTOMATED' ? 'status-dot' : 'warning'}>
+          {coverage.mode === 'AUTOMATED' ? 'AUTO' : 'OPERATOR'} · {coverage.reason}
+        </div>
       </div>
 
       <div className="plan-grid">
@@ -152,7 +166,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
               {plan.id === 'manufacturer' && plan.verifiedProfileAvailable ? (
                 <span className="badge">ZWERYFIKOWANY</span>
               ) : plan.id === 'manufacturer' ? (
-                <span className="badge orange">{plan.contextReady ? 'BRAK PROFILU W ARGUS' : 'BRAK PEŁNEGO KONTEKSTU'}</span>
+                <span className="badge orange">OPERATOR</span>
               ) : null}
             </div>
             <p>{plan.description}</p>
