@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 2,
+  "project": "ARGUS_SHOGUN",
+  "ledgerId": "SHOGUN_EVIDENCE_LEDGER_v2",
+  "supersedes": "SHOGUN_EVIDENCE_LEDGER_v1",
+  "checkedAt": "2026-09-01",
+  "scope": {
+    "status": "EVIDENCE_RECONCILED_NOT_OPERATIONAL_RUNTIME",
+    "runtimeOperationalImportAllowed": false,
+    "purpose": "Reconcile product-page claims against official feedcharts and the current feedchart calculator before any manufacturer schedule enters runtime."
+  },
+  "sourcePriorityForScheduleClaims": [
+    "EXPLICIT_CONTEXTUAL_FEEDCHART_OR_CALCULATOR_OUTPUT",
+    "EXPLICIT_CONTEXTUAL_PRODUCT_INFO",
+    "GENERIC_PRODUCT_HOW_TO",
+    "PAGE_HEADER_OR_IMAGE_LABEL"
+  ],
+  "sources": [
+    {
+      "id": "M-DOWNLOADS-20260901",
+      "type": "MANUFACTURER_CURRENT",
+      "url": "https://www.shogunfertilisers.com/pages/downloads",
+      "finding": "Official downloads page publishes dedicated Autoflower and LED Coco/Terra feedcharts."
+    },
+    {
+      "id": "M-SIMPLIFIED-FEEDCHART-20260901",
+      "type": "MANUFACTURER_FEEDCHART",
+      "url": "https://www.shogunfertilisers.com/media/gj3lxdfd/english-simplified-feedchart.pdf",
+      "finding": "Official schedule separates Cuttings/Seedlings, Vegetative weeks, Flowering weeks, hard/soft water, and final water-only week."
+    },
+    {
+      "id": "M-CALCULATOR-20260901",
+      "type": "MANUFACTURER_CURRENT_CALCULATOR",
+      "url": "https://www.shogunfertilisers.com/pages/feedchart-calculator",
+      "finding": "Current calculator requires nutrient line, tank size, water profile and Light/Standard/Heavy schedule profile before producing a personalised schedule."
+    },
+    {
+      "id": "M-KATANA-20260901",
+      "type": "MANUFACTURER_CURRENT",
+      "url": "https://www.shogunfertilisers.com/products/katana-roots"
+    },
+    {
+      "id": "M-SILICON-20260901",
+      "type": "MANUFACTURER_CURRENT",
+      "url": "https://www.shogunfertilisers.com/products/silicon"
+    },
+    {
+      "id": "M-PK-20260901",
+      "type": "MANUFACTURER_CURRENT",
+      "url": "https://www.shogunfertilisers.com/products/pk-warrior-9-18"
+    },
+    {
+      "id": "M-TERRA-20260901",
+      "type": "MANUFACTURER_CURRENT",
+      "url": "https://www.shogunfertilisers.com/products/samurai-terra"
+    }
+  ],
+  "reconciliations": [
+    {
+      "topic": "KATANA_ROOTS_DOSE",
+      "v1Finding": "CONFLICT_0_2_VS_5_ML_L",
+      "v2Finding": "RESOLVED_CONTEXT_SPLIT_FOR_SCHEDULE",
+      "scheduleFacts": [
+        "Cuttings/seedlings use 5 ml/L in the explicit propagation context.",
+        "Vegetative root feed uses 0.2 ml/L.",
+        "Early flowering root feed uses 0.2 ml/L for the first three flowering weeks."
+      ],
+      "residualIssue": "The generic how-to line saying 5 ml/L to the tank is inconsistent with the explicit root-feed section, but it is lower-priority generic copy and must not drive a scheduled root-feed plan.",
+      "sourceIds": ["M-SIMPLIFIED-FEEDCHART-20260901", "M-KATANA-20260901"]
+    },
+    {
+      "topic": "SILICON_DOSE",
+      "v1Finding": "CONFLICT_1_VS_4_ML_L",
+      "v2Finding": "SCHEDULE_VALUE_RECONCILED_WITH_RESIDUAL_PAGE_COPY_CONFLICT",
+      "scheduleFacts": [
+        "The official simplified feedchart uses 1 ml/L through vegetative and flowering schedule rows.",
+        "The current detailed Root Feed section and how-to text both state 1 ml/L."
+      ],
+      "residualIssue": "The current page header still displays a 4 ml/L dilution rate. That remains an unresolved page-copy conflict, but does not override the explicit feedchart plus detailed root-feed instructions for schedule generation.",
+      "sourceIds": ["M-SIMPLIFIED-FEEDCHART-20260901", "M-SILICON-20260901"]
+    },
+    {
+      "topic": "PK_WARRIOR_DOSE",
+      "v1Finding": "CONFLICT_0_5_TO_1_VS_4_ML_L",
+      "v2Finding": "RESOLVED_WEEK_CONTEXT_WITH_RESIDUAL_IMAGE_COPY_CONFLICT",
+      "scheduleFacts": [
+        "The official simplified feedchart uses 1 ml/L in the first PK week of the mid-flower window and 0.5 ml/L in the following weeks.",
+        "The current Product Info states 0.5 ml/L during flowering weeks 4-7 and allows up to 1.0 ml/L in the first week."
+      ],
+      "residualIssue": "The current how-to image label says 4 ml/L while the adjacent text says 0.5 ml/L. Treat 4 ml/L as a conflicting copy/image label, never as the scheduled value.",
+      "sourceIds": ["M-SIMPLIFIED-FEEDCHART-20260901", "M-PK-20260901"]
+    },
+    {
+      "topic": "SAMURAI_TERRA_BASE",
+      "v1Finding": "PARTIAL_GENERIC_RANGE",
+      "v2Finding": "CONTEXT_REQUIRED_NOT_SINGLE_DOSE",
+      "scheduleFacts": [
+        "Manufacturer schedule is week-specific and separates Terra Grow from Terra Bloom.",
+        "The official feedchart differentiates hard and soft water for Terra base dosing.",
+        "The current calculator also requires Light, Standard or Heavy feeding profile."
+      ],
+      "residualIssue": "A single generic 2-3 ml/L or 1-4 ml/L value is insufficient for a manufacturer schedule.",
+      "sourceIds": ["M-SIMPLIFIED-FEEDCHART-20260901", "M-CALCULATOR-20260901", "M-TERRA-20260901"]
+    }
+  ],
+  "requiredRuntimeContextBeforeManufacturerSchedule": {
+    "nutrientLine": "TERRA",
+    "phase": "ALREADY_PRESENT",
+    "phaseWeek": "MISSING",
+    "waterProfile": "MISSING",
+    "scheduleProfile": "MISSING",
+    "batchLiters": "ALREADY_PRESENT"
+  },
+  "availabilityConclusion": {
+    "previousBlanketConclusion": "NO_COMPLETE_VERIFIED_MANUFACTURER_PLAN",
+    "correctedConclusion": "OFFICIAL_SCHEDULE_DATA_EXISTS_BUT_RUNTIME_CONTEXT_IS_INSUFFICIENT_TO_SELECT_ONE_UNIQUE_SCHEDULE",
+    "operationalValuesPromoted": false,
+    "reason": "The manufacturer publishes contextual schedules. Runtime still lacks phase-week, water profile and schedule profile, and the currently published dedicated LED feedchart has not yet been captured as machine-readable evidence."
+  },
+  "nextPromotionGate": {
+    "required": [
+      "capture exact current LED Coco/Terra feedchart values or deterministic calculator output for the chosen V1 profile",
+      "add the minimal missing context needed to choose a single schedule",
+      "promote only one concrete manufacturer context first"
+    ]
+  }
+}
