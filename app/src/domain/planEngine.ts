@@ -7,18 +7,19 @@ const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 1
 export function buildPlanVariants(context: PlanContext): PlanVariant[] {
   const { batchLiters, cycleDay, phase } = context;
   const factor = batchLiters / 10;
-  const manufacturerStatus = getManufacturerPlanStatus(phase);
+  const manufacturerStatus = getManufacturerPlanStatus(context);
 
   return DEMO_PLAN_TEMPLATES.map((template) => {
     if (template.id === 'manufacturer') {
       return {
         id: template.id,
         label: template.label,
-        description: 'Dane producenta istnieją, ale bieżący kontekst nie wystarcza jeszcze do wyboru jednego harmonogramu.',
+        description: 'Oficjalny harmonogram producenta wymaga jednego konkretnego kontekstu.',
         batchLiters,
         cycleDay,
         phase,
         selectable: false,
+        contextReady: manufacturerStatus.contextReady,
         availabilityReason: manufacturerStatus.reason,
         evidenceLedger: manufacturerStatus.evidenceLedger,
         ingredients: [],
