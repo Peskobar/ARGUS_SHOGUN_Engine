@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
@@ -8,6 +8,7 @@
   "upgrade3At": "2026-09-01",
   "upgrade4At": "2026-09-01",
   "upgrade4RAt": "2026-09-01",
+  "contextUpgradeAt": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -38,13 +39,13 @@
     },
     {
       "path": "evidence/SHOGUN_EVIDENCE_LEDGER_v2.json",
-      "status": "RUNTIME_AVAILABILITY_ONLY",
+      "status": "RUNTIME_CONTEXT_ONLY",
       "reviewedAt": "2026-09-01",
       "sourceScope": "CURRENT_OFFICIAL_PRODUCT_PAGES_PLUS_FEEDCHARTS_AND_CALCULATOR",
       "runtimeConsumer": "app/src/data/manufacturerPlanStatus.ts",
-      "runtimeSubset": "PLAN_CONTEXT_AVAILABILITY_ONLY",
+      "runtimeSubset": "PHASE_WEEK_WATER_PROFILE_SCHEDULE_PROFILE_AND_PLAN_AVAILABILITY_ONLY",
       "operationalValuesPromoted": false,
-      "note": "Upgrade 4R resolves schedule-context false conflicts and corrects the runtime conclusion: official schedule data exists, but V1 lacks enough context to select one unique manufacturer schedule. No dose or concentration is imported into app/src."
+      "note": "Runtime now stores the minimal context required to choose a unique manufacturer schedule: phase week, water profile and feeding profile; FLUSH only requires phase week. No dose or concentration from the ledger is imported into app/src yet."
     },
     {
       "path": "quarantine/unverified-recipes.json",
