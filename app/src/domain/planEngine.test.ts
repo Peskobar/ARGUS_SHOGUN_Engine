@@ -25,19 +25,20 @@ void test('plan zachowuje dzień cyklu i fazę z kontekstu', () => {
   assert.equal(plan.phase, 'VEG');
 });
 
-void test('Producent nie zawiera już dawek DEMO i nie jest wybieralny', () => {
+void test('Producent nie zawiera dawek DEMO i wskazuje zrekoncyliowany ledger', () => {
   const manufacturer = buildPlanVariants(context())[0];
   assert.equal(manufacturer.id, 'manufacturer');
   assert.equal(manufacturer.selectable, false);
   assert.equal(manufacturer.ingredients.length, 0);
-  assert.equal(manufacturer.evidenceLedger, 'SHOGUN_EVIDENCE_LEDGER_v1');
+  assert.equal(manufacturer.evidenceLedger, 'SHOGUN_EVIDENCE_LEDGER_v2');
 });
 
-void test('Producent bez kompletnego planu nie przechodzi walidacji wykonania', () => {
-  const manufacturer = buildPlanVariants(context())[0];
+void test('Producent czeka na kontekst zamiast udawać brak danych producenta', () => {
+  const manufacturer = buildPlanVariants({ batchLiters: 10, cycleDay: 20, phase: 'VEG' })[0];
   const blockers = validatePlanForExecution(manufacturer);
   assert.ok(blockers.length > 0);
-  assert.ok(blockers.some((item) => item.includes('Brak kompletnego')));
+  assert.ok(blockers.some((item) => item.includes('tygodnia fazy')));
+  assert.ok(getAdvisories(manufacturer, 'UNLOCKED').some((item) => item.includes('profilu wody')));
 });
 
 void test('skaluje demo Zbalansowany 10 L do 5 L liniowo', () => {
