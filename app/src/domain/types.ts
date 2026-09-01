@@ -4,11 +4,11 @@ export type ControlMode = 'PRO' | 'STANDARD' | 'UNLOCKED';
 export type PlanId = 'manufacturer' | 'balanced' | 'growth';
 export type SourceStatus = 'DEMO_DATA_NOT_FOR_USE' | 'VERIFIED' | 'OPERATOR';
 export type GrowthPhase = 'SEEDLING' | 'VEG' | 'FLOWER' | 'FLUSH';
-export type WaterProfile = 'SOFT' | 'HARD';
+export type WaterProfile = 'RO' | 'SOFT' | 'MODERATELY_HARD' | 'HARD' | 'CUSTOM';
 export type ScheduleProfile = 'LIGHT' | 'STANDARD' | 'HEAVY';
 
 export const GROWTH_PHASES: readonly GrowthPhase[] = ['SEEDLING', 'VEG', 'FLOWER', 'FLUSH'];
-export const WATER_PROFILES: readonly WaterProfile[] = ['SOFT', 'HARD'];
+export const WATER_PROFILES: readonly WaterProfile[] = ['RO', 'SOFT', 'MODERATELY_HARD', 'HARD', 'CUSTOM'];
 export const SCHEDULE_PROFILES: readonly ScheduleProfile[] = ['LIGHT', 'STANDARD', 'HEAVY'];
 
 export const PHASE_LABELS: Record<GrowthPhase, string> = {
@@ -19,8 +19,11 @@ export const PHASE_LABELS: Record<GrowthPhase, string> = {
 };
 
 export const WATER_PROFILE_LABELS: Record<WaterProfile, string> = {
+  RO: 'RO / destylowana',
   SOFT: 'Miękka',
+  MODERATELY_HARD: 'Średnio twarda',
   HARD: 'Twarda',
+  CUSTOM: 'Własna',
 };
 
 export const SCHEDULE_PROFILE_LABELS: Record<ScheduleProfile, string> = {
@@ -35,6 +38,7 @@ export interface PlanContext {
   phase: GrowthPhase;
   phaseWeek: number | null;
   waterProfile: WaterProfile | null;
+  customWaterEc: number | null;
   scheduleProfile: ScheduleProfile | null;
 }
 
@@ -88,6 +92,7 @@ export interface AppState {
   phase: GrowthPhase;
   phaseWeek: number | null;
   waterProfile: WaterProfile | null;
+  customWaterEc: number | null;
   scheduleProfile: ScheduleProfile | null;
   selectedPlanId: PlanId | null;
   mixerStep: number;
