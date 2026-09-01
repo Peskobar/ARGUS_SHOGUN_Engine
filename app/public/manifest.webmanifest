@@ -1,0 +1,9 @@
+{
+  "name": "ARGUS SHOGUN",
+  "short_name": "SHOGUN",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090b0a",
+  "theme_color": "#090b0a",
+  "description": "Offline-first operator workflow for ARGUS SHOGUN"
+}

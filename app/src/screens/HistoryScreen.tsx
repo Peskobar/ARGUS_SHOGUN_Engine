@@ -1,0 +1,33 @@
+import { useAppStore } from '../store/AppStore.tsx';
+
+export function HistoryScreen() {
+  const { state } = useAppStore();
+
+  return (
+    <section className="screen stack-lg">
+      <div>
+        <div className="eyebrow">HISTORIA</div>
+        <h1>Wykonane sesje</h1>
+        <p className="muted">Snapshot wykonania, nie aktualna wersja planu.</p>
+      </div>
+
+      {state.history.length === 0 ? <div className="empty">Brak wykonanych sesji.</div> : null}
+
+      <div className="history-list">
+        {state.history.map((record) => (
+          <article className="history-card" key={record.id}>
+            <div className="history-top">
+              <strong>{record.planLabel}</strong>
+              <span>{record.batchLiters} L</span>
+            </div>
+            <small>{new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.completedAt))}</small>
+            <small>Tryb: {record.controlMode}</small>
+            <div className="history-ingredients">
+              {record.ingredients.map((item) => <span key={item.id}>{item.name}: {item.amountMl} ml</span>)}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}

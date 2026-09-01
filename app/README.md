@@ -1,9 +1,20 @@
 # NEW ARGUS SHOGUN APP
 
-Ten katalog jest jedynym miejscem dla nowej implementacji aplikacji.
+Vertical Slice V1.
 
-Nie kopiować tutaj starej architektury hurtowo. Elementy z `legacy/` mogą być przenoszone wyłącznie po świadomej ocenie jako dawcy: algorytm, dane, test lub użyteczny komponent.
+## Start
 
-Docelowy podstawowy przepływ V1:
+```sh
+npm install
+npm run dev
+```
 
-`DZISIAJ → PLAN → PRZYGOTOWANIE → MIXER → PODLEWANIE ZAKOŃCZONE → HISTORIA`
+## Check
+
+```sh
+npm run check
+```
+
+## Ważne
+
+`src/data/demoPlans.ts` zawiera **wyłącznie dane demonstracyjne**. To nie są zweryfikowane receptury producenta.

@@ -1,30 +1,52 @@
-# ARGUS SHOGUN — NEW MAIN
+# ARGUS SHOGUN — NEW ENGINE
 
-Nowa aplikacja ARGUS SHOGUN jest rozwijana od czystego korzenia repozytorium.
+Nowa aplikacja operatorska budowana od czystego `main`.
 
-## Zasada nadrzędna
+## Zasada produktu
 
-- Operator pozostaje właścicielem decyzji.
-- ARGUS doradza, przelicza, ostrzega i dokumentuje.
-- Nowa aplikacja nie dziedziczy automatycznie starego modelu bramek ani starej architektury.
-- Tryb UNLOCKED ma usuwać blokady operatorskie; twarde zatrzymania są zarezerwowane dla integralności technicznej danych i niemożliwych operacji.
+**ARGUS doradza. Operator decyduje. System liczy i zapisuje.**
 
-## Układ repozytorium
+- brak domenowych hard-blocków,
+- ostrzeżenia nie odbierają operatorowi możliwości kontynuacji,
+- twarde zatrzymanie występuje wyłącznie przy technicznie niewykonalnym lub niespójnym stanie danych,
+- stary Engine jest wyłącznie dawcą kodu i materiałem referencyjnym.
 
-- `app/` — nowa aplikacja ARGUS SHOGUN.
-- `docs/` — kontrakty, blueprinty i decyzje projektowe.
-- `legacy/ARGUS_SHOGUN_Engine_v1/` — zamrożony stary Engine, wyłącznie dawca kodu i materiał referencyjny.
+## Repo
 
-## Aktualny etap
+- `app/` — nowa aplikacja V1,
+- `docs/` — kontrakty i blueprinty,
+- `legacy/ARGUS_SHOGUN_Engine_v1/` — zamrożony dawca.
 
-1. Discovery — gotowe.
-2. Decision Ledger — gotowe.
-3. Product Contract — gotowe.
-4. UX Blueprint — gotowe.
-5. UNLOCKED policy — do domknięcia.
-6. Technical Blueprint — następny.
-7. V1 Scope — następny.
-8. Repo/implementation blueprint — następny.
-9. Vertical Slice V1 — po zamknięciu blueprintów.
+## Uruchomienie
 
-Stary Engine nie jest specyfikacją nowej aplikacji.
+```sh
+cd app
+npm install
+npm run dev
+```
+
+Pełna kontrola lokalna:
+
+```sh
+npm run check
+```
+
+## V1
+
+Przepływ pionowy:
+
+`DZISIAJ → PLAN → PRZYGOTOWANIE → MIXER → PODLEWANIE ZAKOŃCZONE → HISTORIA`
+
+Dodatkowe sekcje V1: `DONICE` i podstawowe `TRENDY`.
+
+## Status
+
+- Discovery: LOCK
+- Product Contract: v0.2
+- UX Blueprint: v0.2
+- Control Policy / UNLOCKED: LOCK
+- Technical Blueprint: v0.1
+- V1 Scope: v0.1
+- Vertical Slice: zaimplementowany
+
+> Dane recepturowe w bieżącym seedzie są demonstracyjne. Nie są tabelą producenta i nie wolno ich traktować jako zweryfikowane dawki.

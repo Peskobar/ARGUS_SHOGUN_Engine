@@ -1,14 +1,14 @@
-# ARGUS SHOGUN — DOCUMENTATION
+# ARGUS SHOGUN — DOCUMENTATION INDEX
 
-Dokumentacja nowej aplikacji.
+Kanoniczna dokumentacja nowej aplikacji.
 
-Planowana struktura:
+1. `00_DISCOVERY/DECISION_LEDGER.md`
+2. `01_PRODUCT/PRODUCT_CONTRACT_v0.2.md`
+3. `02_UX/UX_BLUEPRINT_v0.2.md`
+4. `03_TECHNICAL/CONTROL_POLICY.md`
+5. `03_TECHNICAL/TECHNICAL_BLUEPRINT_v0.1.md`
+6. `04_V1_SCOPE/V1_SCOPE_v0.1.md`
+7. `05_IMPLEMENTATION/REPO_BLUEPRINT.md`
+8. `05_IMPLEMENTATION/E2E_ACCEPTANCE.md`
 
-- `00_DISCOVERY/`
-- `01_PRODUCT/`
-- `02_UX/`
-- `03_TECHNICAL/`
-- `04_V1_SCOPE/`
-- `05_IMPLEMENTATION/`
-
-Najbliższy krok: domknięcie polityki UNLOCKED, następnie Technical Blueprint v0.1 i V1 Scope.
+`legacy/` nie jest częścią tej specyfikacji.
