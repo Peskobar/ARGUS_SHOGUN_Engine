@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
@@ -11,6 +11,7 @@
   "contextUpgradeAt": "2026-09-01",
   "upgrade5At": "2026-09-01",
   "upgrade6At": "2026-09-01",
+  "upgrade7At": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -70,7 +71,31 @@
       "runtimeConsumer": "app/src/data/manufacturerSchedule.ts",
       "runtimeSubset": "TERRA_SEEDLING_WEEK_1_ONLY",
       "operationalValuesPromoted": true,
-      "note": "First exact manufacturer profile. Promotes only Start 4 ml/L and Katana Roots 5 ml/L for SEEDLING week 1. No water/schedule-profile assumption, no nearest-week fallback, no invented tool size or mixing timer."
+      "note": "Exact manufacturer profile. Start 4 ml/L and Katana Roots 5 ml/L for SEEDLING week 1."
+    },
+    {
+      "path": "evidence/SHOGUN_PROFILE_TERRA_SEEDLING_W2_v1.json",
+      "status": "PROMOTED_EXACT_RUNTIME_PROFILE",
+      "reviewedAt": "2026-09-01",
+      "runtimeConsumer": "app/src/data/manufacturerSchedule.ts",
+      "runtimeSubset": "TERRA_SEEDLING_WEEK_2_ONLY",
+      "operationalValuesPromoted": true,
+      "note": "Second exact manufacturer profile. Start 4 ml/L and Katana Roots 5 ml/L for SEEDLING week 2. No nearest-week fallback."
+    },
+    {
+      "path": "evidence/OPERATOR_NONBLOCKING_POLICY_v1.json",
+      "status": "PROMOTED_PRODUCT_POLICY",
+      "reviewedAt": "2026-09-01",
+      "runtimeConsumers": [
+        "app/src/domain/planEngine.ts",
+        "app/src/store/AppStore.tsx",
+        "app/src/screens/PlanScreen.tsx",
+        "app/src/screens/PreparationScreen.tsx",
+        "app/src/screens/MixerScreen.tsx",
+        "app/src/screens/HistoryScreen.tsx"
+      ],
+      "operationalValuesPromoted": false,
+      "note": "Domain warnings and missing automatic profile coverage cannot block navigation. Operator override records execution explicitly without inventing unknown doses."
     },
     {
       "path": "quarantine/unverified-recipes.json",
@@ -91,5 +116,5 @@
       "note": "Technically reviewed but not required by the active V1 flow. Preserve as donor knowledge, not runtime architecture."
     }
   ],
-  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. Operational values are promoted only for an exact verified context. No interpolation, nearest-match fallback or hidden default is allowed."
+  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. Operational values are promoted only for an exact verified context. No interpolation, nearest-match fallback or hidden default is allowed. Domain uncertainty is advisory; operator override may continue without promoting unknown values."
 }
