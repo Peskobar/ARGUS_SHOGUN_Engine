@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "project": "ARGUS_SHOGUN",
+  "ledgerId": "SHOGUN_EVIDENCE_LEDGER_v1",
+  "checkedAt": "2026-09-01",
+  "scope": {
+    "status": "EVIDENCE_ONLY_NOT_RUNTIME",
+    "runtimeImportAllowed": false,
+    "purpose": "Atomic manufacturer evidence for later controlled promotion into the active V1 plan flow.",
+    "promotionRule": "Only VERIFIED claims with an active V1 consumer may be promoted. PARTIAL and CONFLICT claims must not drive a production plan."
+  },
+  "statusDefinitions": {
+    "VERIFIED": "The cited current official manufacturer source directly supports the atomic claim.",
+    "PARTIAL": "The official source supports only part of what a production plan would need.",
+    "CONFLICT": "Current official manufacturer material contains materially inconsistent values or instructions for the same operational question."
+  },
+  "sources": [
+    {"id":"M-START-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun Start","url":"https://www.shogunfertilisers.com/products/start","checkedAt":"2026-09-01"},
+    {"id":"M-KATANA-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun Katana Roots","url":"https://www.shogunfertilisers.com/products/katana-roots","checkedAt":"2026-09-01"},
+    {"id":"M-SILICON-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun Silicon","url":"https://www.shogunfertilisers.com/products/silicon","checkedAt":"2026-09-01"},
+    {"id":"M-CALMAG-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun Calmag","url":"https://www.shogunfertilisers.com/products/calmag","checkedAt":"2026-09-01"},
+    {"id":"M-ZENZYM-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun Zenzym","url":"https://www.shogunfertilisers.com/products/zenzym","checkedAt":"2026-09-01"},
+    {"id":"M-TERRA-20260901","type":"MANUFACTURER_CURRENT","title":"Samurai Terra Grow & Bloom","url":"https://www.shogunfertilisers.com/products/samurai-terra","checkedAt":"2026-09-01"},
+    {"id":"M-SUMO-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun Sumo Active Boost","url":"https://www.shogunfertilisers.com/products/sumo-active-boost","checkedAt":"2026-09-01"},
+    {"id":"M-PK-20260901","type":"MANUFACTURER_CURRENT","title":"Shogun PK Warrior 9/18","url":"https://www.shogunfertilisers.com/products/pk-warrior-9-18","checkedAt":"2026-09-01"}
+  ],
+  "claims": [
+    {"id":"start-seedling-4","productId":"shogun-start","claimType":"DOSE","method":"SOAK_OR_EARLY_FEED","phase":["SEEDLING","VEG"],"value":{"min":4,"max":4,"unit":"ml/L"},"status":"VERIFIED","sourceIds":["M-START-20260901"],"notes":"4 ml/L for seedling/cutting pre-soak and during the first two weeks of veg."},
+    {"id":"terra-general-dose","productId":"samurai-terra-grow|samurai-terra-bloom","claimType":"DOSE_RANGE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"min":1,"max":4,"unit":"ml/L"},"status":"PARTIAL","sourceIds":["M-TERRA-20260901"],"notes":"Current page gives a broad 1-4 ml/L range and a general 2-3 ml/L how-to, while directing users to the feed chart for dosage. Not sufficient for a week-specific production plan."},
+    {"id":"terra-grow-xor-bloom","productId":"samurai-terra-grow|samurai-terra-bloom","claimType":"MUTUAL_EXCLUSION","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"rule":"USE_EITHER_GROW_OR_BLOOM_NEVER_BOTH"},"status":"VERIFIED","sourceIds":["M-TERRA-20260901"],"notes":"Manufacturer explicitly says never mix Grow and Bloom in the same solution."},
+    {"id":"katana-root-0.2","productId":"katana-roots","claimType":"DOSE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"min":0.2,"max":0.2,"unit":"ml/L","window":"VEG_AND_FIRST_3_WEEKS_FLOWER"},"status":"CONFLICT","conflictGroup":"katana-root-dose-current-page","sourceIds":["M-KATANA-20260901"],"notes":"Product Info states 0.2 ml/L root feed."},
+    {"id":"katana-generic-5","productId":"katana-roots","claimType":"DOSE","method":"UNSCOPED_GENERIC_HOW_TO","phase":["SEEDLING","VEG","FLOWER"],"value":{"min":5,"max":5,"unit":"ml/L"},"status":"CONFLICT","conflictGroup":"katana-root-dose-current-page","sourceIds":["M-KATANA-20260901"],"notes":"Same current page later says to add 5 ml/L to the tank as a general rule. Do not use as routine root-feed truth."},
+    {"id":"katana-seedling-soak-5","productId":"katana-roots","claimType":"DOSE","method":"SOAK_OR_PROP_WATER","phase":["SEEDLING"],"value":{"min":5,"max":5,"unit":"ml/L","durationMinutes":15,"cadence":"weekly_after_soak_until_move"},"status":"VERIFIED","sourceIds":["M-KATANA-20260901"],"notes":"5 ml/L is directly supported for plug/cube soak and subsequent weekly propagation watering."},
+    {"id":"silicon-root-1","productId":"silicon","claimType":"DOSE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"min":1,"max":1,"unit":"ml/L"},"status":"CONFLICT","conflictGroup":"silicon-dose-current-page","sourceIds":["M-SILICON-20260901"],"notes":"Root Feed and detailed how-to state 1 ml/L throughout the grow."},
+    {"id":"silicon-header-4","productId":"silicon","claimType":"DOSE","method":"UNSCOPED_PAGE_HEADER","phase":["VEG","FLOWER"],"value":{"min":4,"max":4,"unit":"ml/L"},"status":"CONFLICT","conflictGroup":"silicon-dose-current-page","sourceIds":["M-SILICON-20260901"],"notes":"Same current page displays 4 ml/L in the dilution-rate header. Do not promote until reconciled."},
+    {"id":"silicon-before-base","productId":"silicon","claimType":"PROCESS_RULE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"rule":"ADD_SILICON_TO_WATER_AND_ADJUST_PH_BELOW_7_BEFORE_BASE"},"status":"VERIFIED","sourceIds":["M-SILICON-20260901"],"notes":"Manufacturer root-feed instructions place Silicon in water and pH adjustment before base nutrients."},
+    {"id":"calmag-root-0-1","productId":"calmag","claimType":"DOSE_RANGE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"min":0,"max":1,"unit":"ml/L"},"status":"VERIFIED","sourceIds":["M-CALMAG-20260901"],"notes":"0-1 ml/L during vegetative and flowering stages."},
+    {"id":"calmag-soft-ro-0.5-1","productId":"calmag","claimType":"CONDITIONAL_DOSE_RANGE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"condition":"SOFT_OR_RO_WATER","value":{"min":0.5,"max":1,"unit":"ml/L"},"status":"VERIFIED","sourceIds":["M-CALMAG-20260901"],"notes":"Manufacturer specifically recommends 0.5-1 ml/L for soft or RO water."},
+    {"id":"calmag-foliar-15","productId":"calmag","claimType":"DOSE","method":"FOLIAR","phase":["VEG","FLOWER"],"value":{"min":15,"max":15,"unit":"ml/L","phMin":5,"phMax":7,"cadence":"weekly_until_corrected"},"status":"VERIFIED","sourceIds":["M-CALMAG-20260901"],"notes":"Foliar correction only; must not be reused as a root-feed dose."},
+    {"id":"zenzym-routine-2.5","productId":"zenzym","claimType":"DOSE","method":"ROOT_FEED","phase":["VEG","FLOWER"],"value":{"min":2.5,"max":2.5,"unit":"ml/L","window":"THROUGHOUT_VEG_AND_FLOWER_TO_FLUSH"},"status":"VERIFIED","sourceIds":["M-ZENZYM-20260901"],"notes":"Current manufacturer page directly supports 2.5 ml/L routine feed."},
+    {"id":"zenzym-media-refresh","productId":"zenzym","claimType":"SPECIAL_USE","method":"MEDIA_TREATMENT","phase":["SEEDLING","VEG","FLOWER","FLUSH"],"value":{"rule":"UP_TO_10X_STRENGTH_FOR_24H"},"status":"PARTIAL","sourceIds":["M-ZENZYM-20260901"],"notes":"Special media-recycling instruction; not part of normal feeding and not converted into an independent dose."},
+    {"id":"sumo-root-1-2","productId":"sumo-active-boost","claimType":"DOSE_RANGE","method":"ROOT_FEED","phase":["FLOWER"],"value":{"min":1,"max":2,"unit":"ml/L","window":"START_FLOWER_TO_PRE_FLUSH"},"status":"VERIFIED","sourceIds":["M-SUMO-20260901"],"notes":"1-2 ml/L throughout flowering."},
+    {"id":"sumo-foliar-2","productId":"sumo-active-boost","claimType":"DOSE","method":"FOLIAR","phase":["FLOWER"],"value":{"min":2,"max":2,"unit":"ml/L","phMin":5,"phMax":7,"events":["START_FLOWER","+28_DAYS"]},"status":"VERIFIED","sourceIds":["M-SUMO-20260901"],"notes":"Distinct foliar method; must not be reused as root-feed schedule."},
+    {"id":"pk-root-0.5","productId":"pk-warrior","claimType":"DOSE","method":"ROOT_FEED","phase":["FLOWER"],"value":{"min":0.5,"max":0.5,"unit":"ml/L","window":"FLOWER_W4_W7"},"status":"CONFLICT","conflictGroup":"pk-dose-current-page","sourceIds":["M-PK-20260901"],"notes":"Header/Product Info/general-rule text support 0.5 ml/L; first week may be up to 1.0 ml/L."},
+    {"id":"pk-first-week-up-to-1","productId":"pk-warrior","claimType":"CONDITIONAL_DOSE_RANGE","method":"ROOT_FEED","phase":["FLOWER"],"condition":"FIRST_WEEK_OF_PK_WINDOW","value":{"min":0.5,"max":1,"unit":"ml/L"},"status":"CONFLICT","conflictGroup":"pk-dose-current-page","sourceIds":["M-PK-20260901"],"notes":"Product Info allows up to 1.0 ml/L in the first week of the mid-flower window."},
+    {"id":"pk-generic-image-4","productId":"pk-warrior","claimType":"DOSE","method":"UNSCOPED_GENERIC_HOW_TO","phase":["FLOWER"],"value":{"min":4,"max":4,"unit":"ml/L"},"status":"CONFLICT","conflictGroup":"pk-dose-current-page","sourceIds":["M-PK-20260901"],"notes":"Same current page contains a how-to image label saying 4 ml/L while adjacent text says 0.5 ml/L. Do not use 4 ml/L."},
+    {"id":"pk-reduce-bloom-base","productId":"pk-warrior","claimType":"INTERACTION_RULE","method":"ROOT_FEED","phase":["FLOWER"],"value":{"rule":"REDUCE_BLOOM_BASE_BY_25_TO_50_PERCENT"},"status":"VERIFIED","sourceIds":["M-PK-20260901"],"notes":"Manufacturer explicitly instructs reducing bloom nutrients by 25-50% when using PK Warrior."},
+    {"id":"global-no-concentrate-premix","productId":null,"claimType":"PROCESS_RULE","method":"ROOT_FEED","phase":["SEEDLING","VEG","FLOWER","FLUSH"],"value":{"rule":"DO_NOT_PREMIX_CONCENTRATED_PRODUCTS_ALWAYS_ADD_TO_WATER"},"status":"VERIFIED","sourceIds":["M-SILICON-20260901","M-CALMAG-20260901","M-ZENZYM-20260901"],"notes":"Repeated in the manufacturer summary embedded on current product pages."}
+  ],
+  "promotionSummary": {
+    "readyForLaterPromotion": ["start-seedling-4","terra-grow-xor-bloom","katana-seedling-soak-5","silicon-before-base","calmag-root-0-1","calmag-soft-ro-0.5-1","calmag-foliar-15","zenzym-routine-2.5","sumo-root-1-2","sumo-foliar-2","pk-reduce-bloom-base","global-no-concentrate-premix"],
+    "notReadyForPlan": ["terra-general-dose","katana-root-0.2","katana-generic-5","silicon-root-1","silicon-header-4","zenzym-media-refresh","pk-root-0.5","pk-first-week-up-to-1","pk-generic-image-4"],
+    "note": "Ready means the atomic evidence is internally consistent, not that the app should use it now. Runtime promotion remains a separate Upgrade step."
+  }
+}
