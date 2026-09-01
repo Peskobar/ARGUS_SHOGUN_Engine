@@ -49,7 +49,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
           >
             <div className="plan-card-top">
               <strong>{plan.label}</strong>
-              {!plan.selectable ? <span className="badge orange">BRAK ZWERYFIKOWANEGO PLANU</span> : null}
+              {!plan.selectable ? <span className="badge orange">WYMAGA KONTEKSTU</span> : null}
             </div>
             <p>{plan.description}</p>
             {plan.availabilityReason ? <small className="muted">{plan.availabilityReason}</small> : null}
