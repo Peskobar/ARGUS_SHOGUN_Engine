@@ -16,7 +16,7 @@ export function TodayScreen({ navigate }: { navigate: (screen: ScreenId) => void
     .filter((item): item is { id: 'D1' | 'D2' | 'D3' | 'D4'; delta: number } => Boolean(item))
     .sort((a, b) => a.delta - b.delta)[0];
 
-  const selectedLabel = selectedPlan?.selectable ? selectedPlan.label : 'Wybierz dostępny wariant';
+  const selectedLabel = selectedPlan?.label ?? 'Wybierz wariant';
 
   return (
     <section className="screen stack-lg">
