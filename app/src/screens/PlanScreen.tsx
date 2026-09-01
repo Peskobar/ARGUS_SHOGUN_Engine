@@ -19,6 +19,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
     setPhase,
     setPhaseWeek,
     setWaterProfile,
+    setCustomWaterEc,
     setScheduleProfile,
   } = useAppStore();
 
@@ -98,7 +99,28 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
                   </button>
                 ))}
               </div>
+              <small className="muted">Kategorie 1:1 z kalkulatora producenta.</small>
             </label>
+
+            {state.waterProfile === 'CUSTOM' ? (
+              <label className="field">
+                <span>EC własnej wody</span>
+                <div className="weight-entry">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    placeholder="wartość z miernika EC"
+                    value={state.customWaterEc ?? ''}
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
+                      setCustomWaterEc(value === '' ? null : Number(value));
+                    }}
+                  />
+                </div>
+              </label>
+            ) : null}
 
             <label className="field">
               <span>Profil karmienia</span>
