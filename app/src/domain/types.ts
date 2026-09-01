@@ -6,6 +6,7 @@ export type SourceStatus = 'DEMO_DATA_NOT_FOR_USE' | 'VERIFIED' | 'OPERATOR';
 export type GrowthPhase = 'SEEDLING' | 'VEG' | 'FLOWER' | 'FLUSH';
 export type WaterProfile = 'RO' | 'SOFT' | 'MODERATELY_HARD' | 'HARD' | 'CUSTOM';
 export type ScheduleProfile = 'LIGHT' | 'STANDARD' | 'HEAVY';
+export type ExecutionMode = 'PLAN' | 'OPERATOR_OVERRIDE';
 
 export const GROWTH_PHASES: readonly GrowthPhase[] = ['SEEDLING', 'VEG', 'FLOWER', 'FLUSH'];
 export const WATER_PROFILES: readonly WaterProfile[] = ['RO', 'SOFT', 'MODERATELY_HARD', 'HARD', 'CUSTOM'];
@@ -58,7 +59,7 @@ export interface PlanVariant {
   batchLiters: number;
   cycleDay: number;
   phase: GrowthPhase;
-  selectable: boolean;
+  verifiedProfileAvailable?: boolean;
   contextReady?: boolean;
   availabilityReason?: string;
   evidenceLedger?: string;
@@ -82,6 +83,8 @@ export interface HistoryRecord {
   planLabel: string;
   batchLiters: number;
   controlMode: ControlMode;
+  executionMode?: ExecutionMode;
+  executionNote?: string;
   ingredients: IngredientDose[];
 }
 
