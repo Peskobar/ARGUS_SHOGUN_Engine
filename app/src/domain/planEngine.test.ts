@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPlanVariants, getAdvisories, validatePlanForExecution } from './planEngine.ts';
-import type { PlanContext } from './types.ts';
+import type { PlanContext, WaterProfile } from './types.ts';
 
 const context = (batchLiters = 10): PlanContext => ({
   batchLiters,
@@ -9,6 +9,7 @@ const context = (batchLiters = 10): PlanContext => ({
   phase: 'SEEDLING',
   phaseWeek: null,
   waterProfile: null,
+  customWaterEc: null,
   scheduleProfile: null,
 });
 
@@ -18,7 +19,18 @@ const seedlingWeek1 = (batchLiters = 10): PlanContext => ({
   phase: 'SEEDLING',
   phaseWeek: 1,
   waterProfile: null,
+  customWaterEc: null,
   scheduleProfile: null,
+});
+
+const vegContext = (waterProfile: WaterProfile, customWaterEc: number | null = null): PlanContext => ({
+  batchLiters: 10,
+  cycleDay: 20,
+  phase: 'VEG',
+  phaseWeek: 2,
+  waterProfile,
+  customWaterEc,
+  scheduleProfile: 'STANDARD',
 });
 
 void test('buduje trzy warianty bazowe', () => {
@@ -38,6 +50,7 @@ void test('plan zachowuje dzień cyklu i fazę z kontekstu', () => {
     phase: 'VEG',
     phaseWeek: 2,
     waterProfile: 'HARD',
+    customWaterEc: null,
     scheduleProfile: 'STANDARD',
   })[1];
   assert.equal(plan.cycleDay, 9);
@@ -98,6 +111,7 @@ void test('Producent jasno wskazuje brakujące pola kontekstu dla wegi', () => {
     phase: 'VEG',
     phaseWeek: null,
     waterProfile: null,
+    customWaterEc: null,
     scheduleProfile: null,
   })[0];
 
@@ -107,15 +121,26 @@ void test('Producent jasno wskazuje brakujące pola kontekstu dla wegi', () => {
   assert.match(manufacturer.availabilityReason ?? '', /profil karmienia/);
 });
 
+void test('każda gotowa kategoria wody producenta daje kompletny kontekst wegi', () => {
+  for (const waterProfile of ['RO', 'SOFT', 'MODERATELY_HARD', 'HARD'] as const) {
+    const manufacturer = buildPlanVariants(vegContext(waterProfile))[0];
+    assert.equal(manufacturer.contextReady, true, waterProfile);
+    assert.equal(manufacturer.selectable, false, waterProfile);
+  }
+});
+
+void test('Custom wymaga własnej wartości EC', () => {
+  const missingEc = buildPlanVariants(vegContext('CUSTOM'))[0];
+  assert.equal(missingEc.contextReady, false);
+  assert.match(missingEc.availabilityReason ?? '', /EC własnej wody/);
+
+  const withEc = buildPlanVariants(vegContext('CUSTOM', 0.42))[0];
+  assert.equal(withEc.contextReady, true);
+  assert.equal(withEc.selectable, false);
+});
+
 void test('pełny kontekst wegi nie używa danych z innego profilu', () => {
-  const manufacturer = buildPlanVariants({
-    batchLiters: 10,
-    cycleDay: 20,
-    phase: 'VEG',
-    phaseWeek: 2,
-    waterProfile: 'HARD',
-    scheduleProfile: 'STANDARD',
-  })[0];
+  const manufacturer = buildPlanVariants(vegContext('HARD'))[0];
 
   assert.equal(manufacturer.contextReady, true);
   assert.equal(manufacturer.selectable, false);
@@ -129,6 +154,7 @@ void test('Flush wymaga tylko tygodnia fazy w kontekście producenta', () => {
     phase: 'FLUSH',
     phaseWeek: 1,
     waterProfile: null,
+    customWaterEc: null,
     scheduleProfile: null,
   })[0];
 
