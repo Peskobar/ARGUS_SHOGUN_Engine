@@ -22,6 +22,7 @@ const createInitialState = (): AppState => ({
   phase: 'SEEDLING',
   phaseWeek: null,
   waterProfile: null,
+  customWaterEc: null,
   scheduleProfile: null,
   selectedPlanId: 'balanced',
   mixerStep: 0,
@@ -53,9 +54,16 @@ function loadState(): AppState {
     const waterProfile = WATER_PROFILES.includes(parsed.waterProfile as WaterProfile)
       ? (parsed.waterProfile as WaterProfile)
       : null;
+    const customWaterEc = waterProfile === 'CUSTOM' && Number.isFinite(parsed.customWaterEc) && (parsed.customWaterEc ?? -1) >= 0
+      ? parsed.customWaterEc as number
+      : null;
     const scheduleProfile = SCHEDULE_PROFILES.includes(parsed.scheduleProfile as ScheduleProfile)
       ? (parsed.scheduleProfile as ScheduleProfile)
       : null;
+    const selectedPlanId: PlanId | null =
+      parsed.selectedPlanId === 'manufacturer' || parsed.selectedPlanId === 'balanced' || parsed.selectedPlanId === 'growth'
+        ? parsed.selectedPlanId
+        : initial.selectedPlanId;
 
     return {
       ...initial,
@@ -63,8 +71,9 @@ function loadState(): AppState {
       phase,
       phaseWeek,
       waterProfile,
+      customWaterEc,
       scheduleProfile,
-      selectedPlanId: parsed.selectedPlanId === 'manufacturer' ? null : (parsed.selectedPlanId ?? initial.selectedPlanId),
+      selectedPlanId,
       pots: parsed.pots,
       history: parsed.history,
     } as AppState;
@@ -83,6 +92,7 @@ interface StoreValue {
   setPhase: (phase: GrowthPhase) => void;
   setPhaseWeek: (week: number | null) => void;
   setWaterProfile: (profile: WaterProfile) => void;
+  setCustomWaterEc: (ec: number | null) => void;
   setScheduleProfile: (profile: ScheduleProfile) => void;
   selectPlan: (id: PlanId) => void;
   setMixerStep: (step: number) => void;
@@ -116,9 +126,10 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       phase: state.phase,
       phaseWeek: state.phaseWeek,
       waterProfile: state.waterProfile,
+      customWaterEc: state.customWaterEc,
       scheduleProfile: state.scheduleProfile,
     }),
-    [state.batchLiters, cycleDay, state.phase, state.phaseWeek, state.waterProfile, state.scheduleProfile],
+    [state.batchLiters, cycleDay, state.phase, state.phaseWeek, state.waterProfile, state.customWaterEc, state.scheduleProfile],
   );
   const selectedPlan = plans.find((plan) => plan.id === state.selectedPlanId);
 
@@ -134,7 +145,16 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       if (phaseWeek !== null && (!Number.isInteger(phaseWeek) || phaseWeek < 1 || phaseWeek > 12)) return;
       commit((current) => ({ ...current, phaseWeek, mixerStep: 0 }));
     },
-    setWaterProfile: (waterProfile) => commit((current) => ({ ...current, waterProfile, mixerStep: 0 })),
+    setWaterProfile: (waterProfile) => commit((current) => ({
+      ...current,
+      waterProfile,
+      customWaterEc: waterProfile === 'CUSTOM' ? current.customWaterEc : null,
+      mixerStep: 0,
+    })),
+    setCustomWaterEc: (customWaterEc) => {
+      if (customWaterEc !== null && (!Number.isFinite(customWaterEc) || customWaterEc < 0)) return;
+      commit((current) => ({ ...current, customWaterEc, mixerStep: 0 }));
+    },
     setScheduleProfile: (scheduleProfile) => commit((current) => ({ ...current, scheduleProfile, mixerStep: 0 })),
     selectPlan: (selectedPlanId) => {
       const candidate = plans.find((plan) => plan.id === selectedPlanId);
