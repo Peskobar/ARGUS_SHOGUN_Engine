@@ -1,5 +1,6 @@
 import { DEMO_PLAN_TEMPLATES } from '../data/demoPlans.ts';
 import { getManufacturerPlanStatus } from '../data/manufacturerPlanStatus.ts';
+import { getManufacturerSchedule } from '../data/manufacturerSchedule.ts';
 import type { ControlMode, PlanContext, PlanVariant } from './types.ts';
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -8,21 +9,33 @@ export function buildPlanVariants(context: PlanContext): PlanVariant[] {
   const { batchLiters, cycleDay, phase } = context;
   const factor = batchLiters / 10;
   const manufacturerStatus = getManufacturerPlanStatus(context);
+  const manufacturerSchedule = getManufacturerSchedule(context);
 
   return DEMO_PLAN_TEMPLATES.map((template) => {
     if (template.id === 'manufacturer') {
       return {
         id: template.id,
         label: template.label,
-        description: 'Oficjalny harmonogram producenta wymaga jednego konkretnego kontekstu.',
+        description: manufacturerSchedule
+          ? 'Zweryfikowany plan producenta dla siewki, tydzień 1.'
+          : 'Oficjalny harmonogram producenta wymaga dokładnego obsługiwanego kontekstu.',
         batchLiters,
         cycleDay,
         phase,
-        selectable: false,
+        selectable: manufacturerStatus.available,
         contextReady: manufacturerStatus.contextReady,
         availabilityReason: manufacturerStatus.reason,
         evidenceLedger: manufacturerStatus.evidenceLedger,
-        ingredients: [],
+        ingredients: manufacturerSchedule
+          ? manufacturerSchedule.ingredients.map((ingredient) => ({
+              id: ingredient.id,
+              name: ingredient.name,
+              amountMl: round2(ingredient.amountPerLiter * batchLiters),
+              tool: ingredient.tool,
+              mixSeconds: ingredient.mixSeconds,
+              sourceStatus: 'VERIFIED' as const,
+            }))
+          : [],
       };
     }
 
@@ -89,7 +102,10 @@ export function getAdvisories(plan: PlanVariant | undefined, mode: ControlMode):
     return [plan.availabilityReason ?? 'Plan producenta wymaga dodatkowego kontekstu przed wykonaniem.'];
   }
 
-  const advisories = ['Dane tego vertical slice są DEMO i nie są zweryfikowaną recepturą producenta.'];
+  const verified = plan.ingredients.length > 0 && plan.ingredients.every((ingredient) => ingredient.sourceStatus === 'VERIFIED');
+  const advisories = verified
+    ? ['Producent: zweryfikowany jest tylko dokładnie ten profil. ARGUS nie podstawia danych z innego tygodnia.']
+    : ['Dane tego vertical slice są DEMO i nie są zweryfikowaną recepturą producenta.'];
 
   if (mode === 'PRO') {
     advisories.push('PRO: sprawdź źródło receptury, pomiary wejściowe i sens każdej korekty przed wykonaniem.');
