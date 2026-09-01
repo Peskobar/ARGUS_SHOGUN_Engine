@@ -36,6 +36,9 @@ export interface PlanVariant {
   batchLiters: number;
   cycleDay: number;
   phase: GrowthPhase;
+  selectable: boolean;
+  availabilityReason?: string;
+  evidenceLedger?: string;
   ingredients: IngredientDose[];
 }
 
