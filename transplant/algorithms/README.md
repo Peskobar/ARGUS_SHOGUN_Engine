@@ -1,76 +1,51 @@
 # CODE TRANSPLANT CANDIDATES
 
-Ten katalog rejestruje kandydatów do transplantacji oraz ich stan review. Kod produkcyjny trafia wyłącznie do `app/src` po świadomym przepisaniu i testach.
+Ten katalog przechowuje wiedzę z przeglądu algorytmów dawcy. Po cleanupie V1 żaden z poniższych kandydatów nie jest częścią aktywnego runtime tylko dlatego, że został technicznie dobrze przepisany.
+
+## Zasada po cleanupie
+
+**Brak aktywnego konsumenta w V1 = brak promocji do `app/src`.**
+
+Dobra implementacja nie jest sama w sobie powodem, żeby rozbudowywać produkt.
 
 ## Kandydat A — syringe/tool allocation
 Źródło: `legacy/ARGUS_SHOGUN_Engine_v1/src/syringeEngine.ts`
 
-Wartościowe własności dawcy:
+Wartościowe odkrycia z review:
 - deterministyczna alokacja fizycznych instancji,
-- jedna instancja narzędzia maksymalnie dla jednego produktu w przygotowanym zestawie,
-- tryby PRECISION / SPEED / MIN_TOOLS,
-- jawne shortages i usage summary.
+- jedna instancja narzędzia maksymalnie dla jednego produktu,
+- jawne shortages i usage summary,
+- wykryta luka dawcy: powtarzający się `productId` mógł nadpisać wcześniejsze assignments.
 
-Wykryta luka dawcy:
-- powtarzający się `productId` mógł nadpisać wcześniejsze assignments, mimo że narzędzia zostały już zużyte.
+W trakcie transplantacji powstała poprawiona implementacja z agregacją requestów i walidacją tool IDs. Została usunięta z aktywnego `app/src` podczas cleanupu V1, ponieważ nie miała konsumenta w aktualnym flow.
 
-Nowa implementacja:
-- `app/src/domain/toolAllocator.ts`,
-- agreguje powtarzające się requesty przed alokacją,
-- waliduje requesty i tool types,
-- wykrywa duplicate tool IDs,
-- nie importuje fizycznej listy strzykawek z dawcy,
-- nie zna receptur, dawek, UI, magazynu ani gate modelu.
+Kod jest zachowany w historii Git oraz branchu:
+`archive/pre-v1-cleanup-2026-09-01`.
 
-Status: `PROMOTED_ALGORITHM`.
+Dla V1 preferowany jest minimalny mechanizm: **ilość składnika → sugerowana pojemność narzędzia**. Bez liczenia fizycznych sztuk, dopóki realny workflow tego nie wymaga.
+
+Status: `REVIEWED_CANDIDATE_NOT_IN_V1`.
 
 ## Kandydat B — recipe pure functions
 Źródło: `legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts`
 
-Wartościowe własności dawcy:
+Wartościowe odkrycia z review:
 - strict context filter,
-- stabilne sortowanie przy jawnie dostarczonej polityce roli / `mixOrder`,
-- wykrywanie duplikatów i niepoprawnych liczb.
+- stabilne sortowanie,
+- wykrywanie duplikatów i niepoprawnych liczb,
+- polityka kolejności powinna być wstrzykiwana, nie zaszyta,
+- issues nie powinny automatycznie oznaczać UI gate.
 
-Nowa implementacja:
-- `app/src/domain/recipeKernel.ts`,
-- filtr metody jest ścisły i nie używa wildcardów,
-- `mixOrder` ma pierwszeństwo przed polityką roli,
-- równe order zachowują source order,
-- walidacja zwraca `issues` bez `severity` i bez decyzji UI,
-- nie posiada wbudowanej kolejności ról,
-- polityka kolejności musi zostać jawnie wstrzyknięta przez caller,
-- nie tworzy checkpointów procesu.
+Powstały `recipeKernel.ts` był technicznie poprawny po poprawkach, ale nie miał konsumenta w działającym V1. Został wycofany z `app/src`, a wiedza pozostaje tutaj.
 
-Celowo odrzucono z dawcy:
-- severity ERROR jako blokadę operatorską,
-- inventory shortage jako domenowy hard-stop,
-- `RECIPE_CONFLICT` jako bezwarunkowy UI lock,
-- zaszytą domyślną mixing policy przed jej osobnym review.
-
-Status: `PROMOTED_ALGORITHM`.
+Status: `REVIEWED_CANDIDATE_NOT_IN_V1`.
 
 ## Kandydat C — mixing/checkpoint policy
 Źródło: `legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts`
 
-Audyt: `transplant/review/mixing-policy-audit.md`.
+Audyt źródłowy pozostaje w:
+`transplant/review/mixing-policy-audit.md`.
 
-Po audycie producenta polityka została rozcięta. Promowano wyłącznie:
-- carrier water first,
-- no concentrate premix,
-- Silicon before base,
-- Terra Grow XOR Terra Bloom,
-- końcową checklistę pH + EC bez narzuconej kolejności między pomiarami,
-- separację checkpointów ROOT_FEED od innych metod jako invariant architektoniczny.
+Review wykazał, że pełny donor role chain nie ma wystarczającego uzasadnienia jako jedna kanoniczna kolejność. Część reguł ma lepsze wsparcie dowodowe, ale po cleanupie również one pozostają poza runtime do chwili, gdy konkretny ekran V1 będzie ich faktycznie potrzebował.
 
-Nie promowano:
-- CALMAG -> BASE,
-- BASE -> ROOTS,
-- ROOTS -> ENZYME,
-- ENZYME -> BOOSTER,
-- BOOSTER -> PK,
-- pełnego donor role chain.
-
-Runtime: `app/src/domain/mixingPolicy.ts`.
-
-Status: `PARTIALLY_PROMOTED`.
+Status: `REVIEWED_CANDIDATE_NOT_IN_V1`.
