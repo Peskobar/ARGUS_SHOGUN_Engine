@@ -85,6 +85,9 @@ export interface HistoryRecord {
   controlMode: ControlMode;
   executionMode?: ExecutionMode;
   executionNote?: string;
+  cycleDay?: number;
+  phase?: GrowthPhase;
+  phaseWeek?: number | null;
   ingredients: IngredientDose[];
 }
 
