@@ -98,6 +98,7 @@ interface StoreValue {
   setMixerStep: (step: number) => void;
   recordPotWeight: (id: AppState['pots'][number]['id'], kg: number) => void;
   completeExecution: () => string | null;
+  completeOperatorExecution: () => string | null;
   resetDemo: () => void;
 }
 
@@ -133,6 +134,17 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
   );
   const selectedPlan = plans.find((plan) => plan.id === state.selectedPlanId);
 
+  const persistCompletedRecord = (record: AppState['history'][number]): string | null => {
+    try {
+      const next = { ...state, history: [record, ...state.history], mixerStep: 0 };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setState(next);
+      return null;
+    } catch {
+      return 'Nie udało się zapisać wykonania lokalnie. Operacja nie została oznaczona jako zakończona.';
+    }
+  };
+
   const value: StoreValue = {
     state,
     plans,
@@ -158,7 +170,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
     setScheduleProfile: (scheduleProfile) => commit((current) => ({ ...current, scheduleProfile, mixerStep: 0 })),
     selectPlan: (selectedPlanId) => {
       const candidate = plans.find((plan) => plan.id === selectedPlanId);
-      if (!candidate?.selectable) return;
+      if (!candidate) return;
       commit((current) => ({ ...current, selectedPlanId, mixerStep: 0 }));
     },
     setMixerStep: (mixerStep) => commit((current) => ({ ...current, mixerStep })),
@@ -177,24 +189,31 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       const blockers = validatePlanForExecution(selectedPlan);
       if (blockers.length > 0 || !selectedPlan) return blockers.join(' ');
 
-      const record = {
+      return persistCompletedRecord({
         id: crypto.randomUUID(),
         completedAt: new Date().toISOString(),
         planId: selectedPlan.id,
         planLabel: selectedPlan.label,
         batchLiters: selectedPlan.batchLiters,
         controlMode: state.controlMode,
+        executionMode: 'PLAN',
         ingredients: selectedPlan.ingredients.map((ingredient) => ({ ...ingredient })),
-      };
+      });
+    },
+    completeOperatorExecution: () => {
+      if (!selectedPlan) return 'Brak wybranego planu do zapisania jako wykonanie operatora.';
 
-      try {
-        const next = { ...state, history: [record, ...state.history], mixerStep: 0 };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        setState(next);
-        return null;
-      } catch {
-        return 'Nie udało się zapisać wykonania lokalnie. Operacja nie została oznaczona jako zakończona.';
-      }
+      return persistCompletedRecord({
+        id: crypto.randomUUID(),
+        completedAt: new Date().toISOString(),
+        planId: selectedPlan.id,
+        planLabel: selectedPlan.label,
+        batchLiters: selectedPlan.batchLiters,
+        controlMode: state.controlMode,
+        executionMode: 'OPERATOR_OVERRIDE',
+        executionNote: 'Operator wykonał czynność według stanu rzeczywistego. ARGUS nie zapisuje nieznanych dawek jako danych planu.',
+        ingredients: [],
+      });
     },
     resetDemo: () => {
       const next = createInitialState();
