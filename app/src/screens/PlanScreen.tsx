@@ -22,6 +22,8 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
     setScheduleProfile,
   } = useAppStore();
 
+  const needsDetailedManufacturerContext = state.phase === 'VEG' || state.phase === 'FLOWER';
+
   return (
     <section className="screen stack-lg">
       <div>
@@ -60,7 +62,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
       <div className="plan-card stack-lg">
         <div>
           <div className="eyebrow">KONTEKST PRODUCENTA</div>
-          <p className="muted">Tylko dane potrzebne do wybrania właściwego wiersza feedchartu. Aplikacja je zapamiętuje.</p>
+          <p className="muted">Tylko dane potrzebne do wybrania właściwego profilu. Aplikacja je zapamiętuje.</p>
         </div>
 
         <label className="field">
@@ -71,7 +73,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
               inputMode="numeric"
               min={1}
               max={12}
-              placeholder="np. 2"
+              placeholder="np. 1"
               value={state.phaseWeek ?? ''}
               onChange={(event) => {
                 const value = event.currentTarget.value;
@@ -81,7 +83,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
           </div>
         </label>
 
-        {state.phase !== 'FLUSH' ? (
+        {needsDetailedManufacturerContext ? (
           <>
             <label className="field">
               <span>Woda</span>
@@ -126,8 +128,10 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
           >
             <div className="plan-card-top">
               <strong>{plan.label}</strong>
-              {!plan.selectable ? (
-                <span className="badge orange">{plan.contextReady ? 'KONTEKST GOTOWY' : 'UZUPEŁNIJ KONTEKST'}</span>
+              {plan.id === 'manufacturer' && plan.selectable ? (
+                <span className="badge">ZWERYFIKOWANY</span>
+              ) : !plan.selectable ? (
+                <span className="badge orange">{plan.contextReady ? 'PROFIL JESZCZE NIEDOSTĘPNY' : 'UZUPEŁNIJ KONTEKST'}</span>
               ) : null}
             </div>
             <p>{plan.description}</p>
