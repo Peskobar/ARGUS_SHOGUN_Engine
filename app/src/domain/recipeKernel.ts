@@ -33,6 +33,11 @@ export interface ProductRoleLookup {
   mixingRole: MixingRole;
 }
 
+export interface RoleOrderPolicy {
+  weights: Readonly<Partial<Record<MixingRole, number>>>;
+  defaultWeight: number;
+}
+
 export interface OrderedIngredient extends RecipeIngredientDraft {
   sourceIndex: number;
   order: number;
@@ -43,20 +48,6 @@ export interface RecipeIssue {
   subjectId?: string;
   message: string;
 }
-
-const ROLE_ORDER: Readonly<Record<MixingRole, number>> = {
-  SILICON: 100,
-  CALMAG: 300,
-  BASE: 400,
-  ROOTS: 500,
-  ENZYME: 600,
-  BOOSTER: 700,
-  PK: 800,
-  BIOLOGICAL: 900,
-  READY_TO_USE: 1000,
-  OTHER: 1100,
-  PH_ADJUSTER: 1200,
-};
 
 /** Strict context filter. No method acts as a wildcard. */
 export function filterRecipesByContext<T extends RecipeDraft>(
@@ -80,11 +71,13 @@ export function filterRecipesByContext<T extends RecipeDraft>(
 
 /**
  * Produces deterministic ingredient order only.
- * It deliberately does not create operator gates or process checkpoints.
+ * The role policy is injected by the caller so this kernel cannot smuggle an
+ * unreviewed mixing policy into production. Explicit mixOrder still wins.
  */
 export function orderRecipeIngredients(
   recipe: RecipeDraft,
   products: readonly ProductRoleLookup[],
+  policy: RoleOrderPolicy,
 ): OrderedIngredient[] {
   const roles = new Map(products.map((product) => [product.id, product.mixingRole]));
 
@@ -92,7 +85,9 @@ export function orderRecipeIngredients(
     .map((ingredient, sourceIndex) => ({
       ...ingredient,
       sourceIndex,
-      order: ingredient.mixOrder ?? roleWeight(roles.get(ingredient.productId)),
+      order:
+        ingredient.mixOrder ??
+        resolveRoleWeight(roles.get(ingredient.productId), policy),
     }))
     .sort((a, b) => a.order - b.order || a.sourceIndex - b.sourceIndex);
 }
@@ -143,6 +138,15 @@ export function inspectRecipeShape(
   return issues;
 }
 
-export function roleWeight(role: MixingRole | undefined): number {
-  return role ? ROLE_ORDER[role] : ROLE_ORDER.OTHER;
+function resolveRoleWeight(
+  role: MixingRole | undefined,
+  policy: RoleOrderPolicy,
+): number {
+  if (!Number.isFinite(policy.defaultWeight)) {
+    throw new Error('Role order policy defaultWeight must be finite.');
+  }
+  if (!role) return policy.defaultWeight;
+
+  const weight = policy.weights[role];
+  return Number.isFinite(weight) ? (weight as number) : policy.defaultWeight;
 }
