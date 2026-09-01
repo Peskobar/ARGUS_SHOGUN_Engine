@@ -27,15 +27,29 @@ Status: `PROMOTED_ALGORITHM`.
 ## Kandydat B — recipe pure functions
 Źródło: `legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts`
 
-Do rozważenia po odcięciu starej semantyki gate:
+Wartościowe własności dawcy:
 - strict context filter,
-- stabilne sortowanie po role/mixOrder,
-- wykrywanie duplikatów i niepoprawnych liczb,
-- jawne rozdzielenie product steps od process checkpoints.
+- stabilne sortowanie po roli / `mixOrder`,
+- wykrywanie duplikatów i niepoprawnych liczb.
 
-Nie przenosić automatycznie:
-- severity ERROR jako blokady operatorskiej,
-- inventory shortage jako domenowego hard-stop,
-- `RECIPE_CONFLICT` jako bezwarunkowego UI lock w trybie UNLOCKED.
+Nowa implementacja:
+- `app/src/domain/recipeKernel.ts`,
+- filtr metody jest ścisły i nie używa wildcardów,
+- `mixOrder` ma pierwszeństwo przed role order,
+- równe order zachowują source order,
+- walidacja zwraca `issues` bez `severity` i bez decyzji UI,
+- nie tworzy checkpointów procesu i nie importuje mixing policy przed osobnym review.
+
+Celowo odrzucono z dawcy:
+- severity ERROR jako blokadę operatorską,
+- inventory shortage jako domenowy hard-stop,
+- `RECIPE_CONFLICT` jako bezwarunkowy UI lock.
+
+Status: `PROMOTED_ALGORITHM`.
+
+## Kandydat C — mixing/checkpoint policy
+Źródło: `legacy/ARGUS_SHOGUN_Engine_v1/src/recipeEngine.ts`
+
+To osobna warstwa od recipe kernel. Kolejność ról i checkpointy procesu pozostają danymi/polityką wymagającą osobnego review przed użyciem operatorskim.
 
 Status: `REVIEW_REQUIRED`.
