@@ -7,6 +7,9 @@ const context = (batchLiters = 10): PlanContext => ({
   batchLiters,
   cycleDay: 5,
   phase: 'SEEDLING',
+  phaseWeek: null,
+  waterProfile: null,
+  scheduleProfile: null,
 });
 
 void test('buduje trzy warianty bazowe', () => {
@@ -20,7 +23,14 @@ void test('warianty nie udają rekomendacji ARGUS', () => {
 });
 
 void test('plan zachowuje dzień cyklu i fazę z kontekstu', () => {
-  const plan = buildPlanVariants({ batchLiters: 10, cycleDay: 9, phase: 'VEG' })[1];
+  const plan = buildPlanVariants({
+    batchLiters: 10,
+    cycleDay: 9,
+    phase: 'VEG',
+    phaseWeek: 2,
+    waterProfile: 'HARD',
+    scheduleProfile: 'STANDARD',
+  })[1];
   assert.equal(plan.cycleDay, 9);
   assert.equal(plan.phase, 'VEG');
 });
@@ -33,12 +43,62 @@ void test('Producent nie zawiera dawek DEMO i wskazuje zrekoncyliowany ledger', 
   assert.equal(manufacturer.evidenceLedger, 'SHOGUN_EVIDENCE_LEDGER_v2');
 });
 
-void test('Producent czeka na kontekst zamiast udawać brak danych producenta', () => {
-  const manufacturer = buildPlanVariants({ batchLiters: 10, cycleDay: 20, phase: 'VEG' })[0];
+void test('Producent jasno wskazuje brakujące pola kontekstu', () => {
+  const manufacturer = buildPlanVariants({
+    batchLiters: 10,
+    cycleDay: 20,
+    phase: 'VEG',
+    phaseWeek: null,
+    waterProfile: null,
+    scheduleProfile: null,
+  })[0];
+
+  assert.equal(manufacturer.contextReady, false);
+  assert.match(manufacturer.availabilityReason ?? '', /tydzień fazy/);
+  assert.match(manufacturer.availabilityReason ?? '', /profil wody/);
+  assert.match(manufacturer.availabilityReason ?? '', /profil karmienia/);
+});
+
+void test('pełny kontekst Producenta nie promuje jeszcze dawek', () => {
+  const manufacturer = buildPlanVariants({
+    batchLiters: 10,
+    cycleDay: 20,
+    phase: 'VEG',
+    phaseWeek: 2,
+    waterProfile: 'HARD',
+    scheduleProfile: 'STANDARD',
+  })[0];
+
+  assert.equal(manufacturer.contextReady, true);
+  assert.equal(manufacturer.selectable, false);
+  assert.equal(manufacturer.ingredients.length, 0);
+  assert.match(manufacturer.availabilityReason ?? '', /Kontekst producenta jest kompletny/);
+});
+
+void test('Flush wymaga tylko tygodnia fazy w kontekście producenta', () => {
+  const manufacturer = buildPlanVariants({
+    batchLiters: 10,
+    cycleDay: 70,
+    phase: 'FLUSH',
+    phaseWeek: 1,
+    waterProfile: null,
+    scheduleProfile: null,
+  })[0];
+
+  assert.equal(manufacturer.contextReady, true);
+});
+
+void test('Producent nadal nie przechodzi walidacji wykonania przed promocją harmonogramu', () => {
+  const manufacturer = buildPlanVariants({
+    batchLiters: 10,
+    cycleDay: 20,
+    phase: 'VEG',
+    phaseWeek: 2,
+    waterProfile: 'HARD',
+    scheduleProfile: 'STANDARD',
+  })[0];
   const blockers = validatePlanForExecution(manufacturer);
   assert.ok(blockers.length > 0);
-  assert.ok(blockers.some((item) => item.includes('tygodnia fazy')));
-  assert.ok(getAdvisories(manufacturer, 'UNLOCKED').some((item) => item.includes('profilu wody')));
 });
 
 void test('skaluje demo Zbalansowany 10 L do 5 L liniowo', () => {
