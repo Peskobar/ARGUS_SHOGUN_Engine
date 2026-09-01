@@ -6,6 +6,12 @@ void test('buduje trzy warianty bazowe', () => {
   assert.equal(buildPlanVariants(10).length, 3);
 });
 
+void test('warianty DEMO nie udają rekomendacji ARGUS', () => {
+  for (const plan of buildPlanVariants(10)) {
+    assert.equal('recommended' in plan, false);
+  }
+});
+
 void test('skaluje 10 L do 5 L liniowo', () => {
   const full = buildPlanVariants(10)[0];
   const half = buildPlanVariants(5)[0];
