@@ -2,7 +2,7 @@ import { GROWTH_PHASES, PHASE_LABELS, type ScreenId } from '../domain/types.ts';
 import { useAppStore } from '../store/AppStore.tsx';
 
 export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void }) {
-  const { state, plans, selectPlan, setBatchLiters, setPhase } = useAppStore();
+  const { state, plans, selectedPlan, selectPlan, setBatchLiters, setPhase } = useAppStore();
 
   return (
     <section className="screen stack-lg">
@@ -44,18 +44,21 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
           <button
             key={plan.id}
             className={state.selectedPlanId === plan.id ? 'plan-card selected' : 'plan-card'}
+            disabled={!plan.selectable}
             onClick={() => selectPlan(plan.id)}
           >
             <div className="plan-card-top">
               <strong>{plan.label}</strong>
+              {!plan.selectable ? <span className="badge orange">BRAK ZWERYFIKOWANEGO PLANU</span> : null}
             </div>
             <p>{plan.description}</p>
+            {plan.availabilityReason ? <small className="muted">{plan.availabilityReason}</small> : null}
             <small>Dzień {plan.cycleDay} · {PHASE_LABELS[plan.phase]} · {plan.ingredients.length} kroków · {plan.batchLiters} L</small>
           </button>
         ))}
       </div>
 
-      <button className="primary" disabled={!state.selectedPlanId} onClick={() => navigate('preparation')}>
+      <button className="primary" disabled={!selectedPlan?.selectable} onClick={() => navigate('preparation')}>
         PRZEJDŹ DO PRZYGOTOWANIA
       </button>
     </section>
