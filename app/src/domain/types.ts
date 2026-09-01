@@ -3,6 +3,22 @@ export type ScreenId = 'today' | 'plan' | 'preparation' | 'pots' | 'mixer' | 'hi
 export type ControlMode = 'PRO' | 'STANDARD' | 'UNLOCKED';
 export type PlanId = 'manufacturer' | 'balanced' | 'growth';
 export type SourceStatus = 'DEMO_DATA_NOT_FOR_USE' | 'VERIFIED' | 'OPERATOR';
+export type GrowthPhase = 'SEEDLING' | 'VEG' | 'FLOWER' | 'FLUSH';
+
+export const GROWTH_PHASES: readonly GrowthPhase[] = ['SEEDLING', 'VEG', 'FLOWER', 'FLUSH'];
+
+export const PHASE_LABELS: Record<GrowthPhase, string> = {
+  SEEDLING: 'Siewka',
+  VEG: 'Wega',
+  FLOWER: 'Kwitnienie',
+  FLUSH: 'Flush',
+};
+
+export interface PlanContext {
+  batchLiters: number;
+  cycleDay: number;
+  phase: GrowthPhase;
+}
 
 export interface IngredientDose {
   id: string;
@@ -18,6 +34,8 @@ export interface PlanVariant {
   label: string;
   description: string;
   batchLiters: number;
+  cycleDay: number;
+  phase: GrowthPhase;
   ingredients: IngredientDose[];
 }
 
@@ -45,6 +63,7 @@ export interface AppState {
   controlMode: ControlMode;
   batchLiters: number;
   cycleStartDate: string;
+  phase: GrowthPhase;
   selectedPlanId: PlanId | null;
   mixerStep: number;
   history: HistoryRecord[];
