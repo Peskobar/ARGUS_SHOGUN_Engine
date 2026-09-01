@@ -29,21 +29,24 @@ Status: `PROMOTED_ALGORITHM`.
 
 Wartościowe własności dawcy:
 - strict context filter,
-- stabilne sortowanie po roli / `mixOrder`,
+- stabilne sortowanie przy jawnie dostarczonej polityce roli / `mixOrder`,
 - wykrywanie duplikatów i niepoprawnych liczb.
 
 Nowa implementacja:
 - `app/src/domain/recipeKernel.ts`,
 - filtr metody jest ścisły i nie używa wildcardów,
-- `mixOrder` ma pierwszeństwo przed role order,
+- `mixOrder` ma pierwszeństwo przed polityką roli,
 - równe order zachowują source order,
 - walidacja zwraca `issues` bez `severity` i bez decyzji UI,
-- nie tworzy checkpointów procesu i nie importuje mixing policy przed osobnym review.
+- nie posiada wbudowanej kolejności ról,
+- polityka kolejności musi zostać jawnie wstrzyknięta przez caller,
+- nie tworzy checkpointów procesu.
 
 Celowo odrzucono z dawcy:
 - severity ERROR jako blokadę operatorską,
 - inventory shortage jako domenowy hard-stop,
-- `RECIPE_CONFLICT` jako bezwarunkowy UI lock.
+- `RECIPE_CONFLICT` jako bezwarunkowy UI lock,
+- zaszytą domyślną mixing policy przed jej osobnym review.
 
 Status: `PROMOTED_ALGORITHM`.
 
