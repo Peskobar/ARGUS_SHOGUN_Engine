@@ -1,5 +1,5 @@
 import { getCycleDay } from '../domain/planEngine.ts';
-import type { ScreenId } from '../domain/types.ts';
+import { PHASE_LABELS, type ScreenId } from '../domain/types.ts';
 import { useAppStore } from '../store/AppStore.tsx';
 
 export function TodayScreen({ navigate }: { navigate: (screen: ScreenId) => void }) {
@@ -22,7 +22,7 @@ export function TodayScreen({ navigate }: { navigate: (screen: ScreenId) => void
       <div className="hero-row">
         <div>
           <h1>{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</h1>
-          <p className="muted">Dzień cyklu: {cycleDay}</p>
+          <p className="muted">Dzień cyklu: {cycleDay} · Faza: {PHASE_LABELS[state.phase]}</p>
         </div>
         <span className="status-dot">ONLINE/OFFLINE READY</span>
       </div>
@@ -43,7 +43,7 @@ export function TodayScreen({ navigate }: { navigate: (screen: ScreenId) => void
       <button className="plan-hero" onClick={() => navigate('plan')}>
         <span className="eyebrow">PLAN NA DZIŚ</span>
         <strong>{selectedPlan?.label ?? 'Wybierz wariant'}</strong>
-        <span>{state.batchLiters} L · przejdź do planu →</span>
+        <span>{state.batchLiters} L · {PHASE_LABELS[state.phase]} · przejdź do planu →</span>
       </button>
     </section>
   );
