@@ -1,30 +1,31 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
   "extractedAt": "2026-09-01",
+  "cleanupAt": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
-      "status": "PROMOTED_STRUCTURE",
-      "runtime": "app/src/domain/taxonomy.ts"
+      "status": "REVIEWED_CANDIDATE_NOT_IN_V1",
+      "note": "Useful structural vocabulary, but no active V1 consumer. Keep outside app runtime until a concrete feature needs it."
     },
     {
       "path": "candidates/product-identities.json",
-      "status": "PROMOTED_STRUCTURE",
-      "runtime": "app/src/data/referenceCatalog.ts"
+      "status": "REVIEWED_CANDIDATE_NOT_IN_V1",
+      "note": "Stable identities are preserved in staging, but V1 must promote only data required by an active flow."
     },
     {
       "path": "candidates/physical-tools.json",
-      "status": "NEEDS_OPERATOR_CONFIRMATION"
+      "status": "DEFERRED_NOT_REQUIRED_V1",
+      "note": "Physical tool counts are not required for V1 continuation. Do not ask operator to confirm them unless an active feature truly needs inventory-aware allocation."
     },
     {
       "path": "candidates/mixing-policy.json",
-      "status": "PARTIALLY_PROMOTED",
+      "status": "REVIEWED_CANDIDATE_NOT_IN_V1",
       "audit": "transplant/review/mixing-policy-audit.md",
-      "runtime": "app/src/domain/mixingPolicy.ts",
-      "note": "Only evidence-backed subset is promoted. Full donor role chain remains rejected as a default."
+      "note": "Evidence review is preserved. No runtime policy is promoted until an active V1 flow consumes a specific rule."
     },
     {
       "path": "quarantine/unverified-recipes.json",
@@ -36,15 +37,14 @@
     },
     {
       "path": "algorithms/syringe-tool-allocation",
-      "status": "PROMOTED_ALGORITHM",
-      "runtime": "app/src/domain/toolAllocator.ts"
+      "status": "REVIEWED_CANDIDATE_NOT_IN_V1",
+      "note": "Implementation work is preserved in git history and archive/pre-v1-cleanup-2026-09-01. V1 needs only simple tool-size selection unless future workflow proves otherwise."
     },
     {
       "path": "algorithms/recipe-pure-functions",
-      "status": "PROMOTED_ALGORITHM",
-      "runtime": "app/src/domain/recipeKernel.ts",
-      "note": "Role order policy is injected; no hidden donor default is embedded."
+      "status": "REVIEWED_CANDIDATE_NOT_IN_V1",
+      "note": "Technically reviewed but not required by the active V1 flow. Preserve as donor knowledge, not runtime architecture."
     }
   ],
-  "promotionRule": "No donor package may influence app runtime unless its exact promoted subset, provenance and runtime destination are recorded here. Domain findings must not become hard operator gates in UNLOCKED mode."
+  "promotionRule": "No donor package enters app/src without a concrete active V1 consumer. Evidence review alone is not sufficient for runtime promotion. Promote the smallest subset needed by the current user flow, with provenance and tests."
 }
