@@ -197,6 +197,9 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         batchLiters: selectedPlan.batchLiters,
         controlMode: state.controlMode,
         executionMode: 'PLAN',
+        cycleDay,
+        phase: state.phase,
+        phaseWeek: state.phaseWeek,
         ingredients: selectedPlan.ingredients.map((ingredient) => ({ ...ingredient })),
       });
     },
@@ -212,6 +215,9 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         controlMode: state.controlMode,
         executionMode: 'OPERATOR_OVERRIDE',
         executionNote: 'Operator wykonał czynność według stanu rzeczywistego. ARGUS nie zapisuje nieznanych dawek jako danych planu.',
+        cycleDay,
+        phase: state.phase,
+        phaseWeek: state.phaseWeek,
         ingredients: [],
       });
     },
