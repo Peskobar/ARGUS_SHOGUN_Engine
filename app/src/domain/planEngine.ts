@@ -10,7 +10,6 @@ export function buildPlanVariants(batchLiters: number): PlanVariant[] {
     id: template.id,
     label: template.label,
     description: template.description,
-    recommended: template.recommended,
     batchLiters,
     ingredients: template.ingredients.map((ingredient) => ({
       id: ingredient.id,
