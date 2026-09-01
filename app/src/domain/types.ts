@@ -17,7 +17,6 @@ export interface PlanVariant {
   id: PlanId;
   label: string;
   description: string;
-  recommended: boolean;
   batchLiters: number;
   ingredients: IngredientDose[];
 }
