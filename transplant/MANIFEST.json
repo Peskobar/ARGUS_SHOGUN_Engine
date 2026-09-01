@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
@@ -10,6 +10,7 @@
   "upgrade4RAt": "2026-09-01",
   "contextUpgradeAt": "2026-09-01",
   "upgrade5At": "2026-09-01",
+  "upgrade6At": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -44,9 +45,23 @@
       "reviewedAt": "2026-09-01",
       "sourceScope": "CURRENT_OFFICIAL_PRODUCT_PAGES_PLUS_FEEDCHARTS_AND_CALCULATOR",
       "runtimeConsumer": "app/src/data/manufacturerPlanStatus.ts",
-      "runtimeSubset": "PHASE_WEEK_WATER_PROFILE_SCHEDULE_PROFILE_AND_PLAN_AVAILABILITY_ONLY",
+      "runtimeSubset": "PHASE_WEEK_SCHEDULE_PROFILE_AND_PLAN_AVAILABILITY_ONLY",
       "operationalValuesPromoted": false,
-      "note": "Runtime stores the context required for manufacturer schedules. Operational dose promotion is recorded separately per exact profile."
+      "note": "Runtime stores the context required for manufacturer schedules. Exact water-profile categories are recorded separately in SHOGUN_CALCULATOR_CONTEXT_v1."
+    },
+    {
+      "path": "evidence/SHOGUN_CALCULATOR_CONTEXT_v1.json",
+      "status": "PROMOTED_CONTEXT_ONLY",
+      "reviewedAt": "2026-09-01",
+      "runtimeConsumers": [
+        "app/src/domain/types.ts",
+        "app/src/store/AppStore.tsx",
+        "app/src/screens/PlanScreen.tsx",
+        "app/src/data/manufacturerPlanStatus.ts"
+      ],
+      "runtimeSubset": "EXACT_WATER_PROFILE_ENUMS_PLUS_CUSTOM_BACKGROUND_EC_REQUIREMENT",
+      "operationalValuesPromoted": false,
+      "note": "Promotes only the calculator context: RO/distilled, soft, moderately hard, hard, custom; Custom requires its background EC. It does not infer any dose."
     },
     {
       "path": "evidence/SHOGUN_PROFILE_TERRA_SEEDLING_W1_v1.json",
