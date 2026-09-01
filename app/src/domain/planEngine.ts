@@ -17,12 +17,12 @@ export function buildPlanVariants(context: PlanContext): PlanVariant[] {
         id: template.id,
         label: template.label,
         description: manufacturerSchedule
-          ? 'Zweryfikowany plan producenta dla siewki, tydzień 1.'
-          : 'Oficjalny harmonogram producenta wymaga dokładnego obsługiwanego kontekstu.',
+          ? `Zweryfikowany plan producenta dla siewki, tydzień ${manufacturerSchedule.phaseWeek}.`
+          : 'Oficjalny harmonogram producenta nie ma jeszcze danych runtime dla tego dokładnego kontekstu.',
         batchLiters,
         cycleDay,
         phase,
-        selectable: manufacturerStatus.available,
+        verifiedProfileAvailable: manufacturerStatus.available,
         contextReady: manufacturerStatus.contextReady,
         availabilityReason: manufacturerStatus.reason,
         evidenceLedger: manufacturerStatus.evidenceLedger,
@@ -46,7 +46,6 @@ export function buildPlanVariants(context: PlanContext): PlanVariant[] {
       batchLiters,
       cycleDay,
       phase,
-      selectable: true,
       ingredients: template.ingredients.map((ingredient) => ({
         id: ingredient.id,
         name: ingredient.name,
@@ -64,10 +63,6 @@ export function validatePlanForExecution(plan: PlanVariant | undefined): string[
 
   const blockers: string[] = [];
 
-  if (!plan.selectable) {
-    blockers.push(plan.availabilityReason ?? 'Plan nie jest dostępny do wykonania.');
-  }
-
   if (!Number.isFinite(plan.batchLiters) || plan.batchLiters <= 0) {
     blockers.push('Objętość partii musi być dodatnią liczbą.');
   }
@@ -76,7 +71,9 @@ export function validatePlanForExecution(plan: PlanVariant | undefined): string[
     blockers.push('Dzień cyklu musi być dodatnią liczbą całkowitą.');
   }
 
-  if (plan.ingredients.length === 0) blockers.push('Plan nie zawiera składników.');
+  if (plan.ingredients.length === 0) {
+    blockers.push('ARGUS nie ma składników do automatycznego Mixera dla tego planu. To ograniczenie danych, nie decyzja agronomiczna.');
+  }
 
   const ids = new Set<string>();
   for (const ingredient of plan.ingredients) {
@@ -98,8 +95,13 @@ export function validatePlanForExecution(plan: PlanVariant | undefined): string[
 export function getAdvisories(plan: PlanVariant | undefined, mode: ControlMode): string[] {
   if (!plan) return [];
 
-  if (!plan.selectable) {
-    return [plan.availabilityReason ?? 'Plan producenta wymaga dodatkowego kontekstu przed wykonaniem.'];
+  if (plan.id === 'manufacturer' && !plan.verifiedProfileAvailable) {
+    const advisories = [
+      plan.availabilityReason ?? 'Dokładny profil producenta nie został jeszcze wprowadzony.',
+      'To ostrzeżenie nie blokuje operatora. Możesz przejść dalej i zapisać wykonanie jako decyzję operatora.',
+    ];
+    if (mode === 'PRO') advisories.push('PRO: przy wykonaniu operatora ARGUS zapisze, że składniki nie były znane aplikacji.');
+    return advisories;
   }
 
   const verified = plan.ingredients.length > 0 && plan.ingredients.every((ingredient) => ingredient.sourceStatus === 'VERIFIED');
