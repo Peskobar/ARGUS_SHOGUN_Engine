@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "SHOGUN_CALCULATOR_CONTEXT_v1",
+  "checkedAt": "2026-09-01",
+  "source": "https://www.shogunfertilisers.com/pages/feedchart-calculator",
+  "runtimeTargets": [
+    "app/src/domain/types.ts",
+    "app/src/store/AppStore.tsx",
+    "app/src/screens/PlanScreen.tsx",
+    "app/src/data/manufacturerPlanStatus.ts"
+  ],
+  "waterProfiles": [
+    {
+      "runtimeId": "RO",
+      "manufacturerLabel": "Reverse Osmosis (RO) / Distilled Water"
+    },
+    {
+      "runtimeId": "SOFT",
+      "manufacturerLabel": "Soft Water"
+    },
+    {
+      "runtimeId": "MODERATELY_HARD",
+      "manufacturerLabel": "Moderately hard"
+    },
+    {
+      "runtimeId": "HARD",
+      "manufacturerLabel": "Hard water"
+    },
+    {
+      "runtimeId": "CUSTOM",
+      "manufacturerLabel": "Custom",
+      "requires": "background EC value"
+    }
+  ],
+  "scheduleProfiles": [
+    {
+      "runtimeId": "LIGHT",
+      "manufacturerLabel": "Light feeding"
+    },
+    {
+      "runtimeId": "STANDARD",
+      "manufacturerLabel": "Standard feeding"
+    },
+    {
+      "runtimeId": "HEAVY",
+      "manufacturerLabel": "Heavy feeding"
+    }
+  ],
+  "runtimeRules": [
+    "Do not collapse manufacturer water categories into SOFT/HARD.",
+    "CUSTOM is incomplete until a finite non-negative background EC value is present.",
+    "These context values select a future exact manufacturer schedule; they do not themselves create or infer doses.",
+    "No nearest-category fallback is allowed."
+  ],
+  "operationalDoseValuesPromoted": false
+}
