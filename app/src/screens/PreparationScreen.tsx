@@ -6,6 +6,7 @@ export function PreparationScreen({ navigate }: { navigate: (screen: ScreenId) =
   const { state, selectedPlan, setMixerStep } = useAppStore();
   const blockers = validatePlanForExecution(selectedPlan);
   const advisories = getAdvisories(selectedPlan, state.controlMode);
+  const automaticMixerReady = blockers.length === 0;
 
   return (
     <section className="screen stack-lg">
@@ -16,7 +17,7 @@ export function PreparationScreen({ navigate }: { navigate: (screen: ScreenId) =
       </div>
 
       {advisories.map((text) => <div className="warning" key={text}>⚠️ {text}</div>)}
-      {blockers.map((text) => <div className="blocker" key={text}>⛔ {text}</div>)}
+      {blockers.map((text) => <div className="blocker" key={text}>⚙️ {text}</div>)}
 
       <div className="ingredient-list">
         {selectedPlan?.ingredients.map((ingredient) => (
@@ -27,14 +28,18 @@ export function PreparationScreen({ navigate }: { navigate: (screen: ScreenId) =
         ))}
       </div>
 
+      {!automaticMixerReady && selectedPlan ? (
+        <div className="warning">⚠️ Automatyczny Mixer nie ma kompletu danych. Operator nadal może przejść dalej i zapisać wykonanie jako decyzję operatora.</div>
+      ) : null}
+
       <div className="action-row">
         <button className="secondary" onClick={() => navigate('plan')}>WRÓĆ</button>
         <button
           className="primary"
-          disabled={blockers.length > 0}
+          disabled={!selectedPlan}
           onClick={() => { setMixerStep(0); navigate('mixer'); }}
         >
-          START MIXERA
+          {automaticMixerReady ? 'START MIXERA' : 'DALEJ JAKO OPERATOR'}
         </button>
       </div>
     </section>
