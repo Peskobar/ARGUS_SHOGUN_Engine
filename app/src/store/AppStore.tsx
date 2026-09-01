@@ -1,6 +1,13 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
-import { buildPlanVariants, validatePlanForExecution } from '../domain/planEngine.ts';
-import type { AppState, ControlMode, PlanId, PlanVariant } from '../domain/types.ts';
+import { buildPlanVariants, getCycleDay, validatePlanForExecution } from '../domain/planEngine.ts';
+import {
+  GROWTH_PHASES,
+  type AppState,
+  type ControlMode,
+  type GrowthPhase,
+  type PlanId,
+  type PlanVariant,
+} from '../domain/types.ts';
 
 const STORAGE_KEY = 'argus-shogun-v1-state';
 
@@ -8,6 +15,7 @@ const createInitialState = (): AppState => ({
   controlMode: 'STANDARD',
   batchLiters: 10,
   cycleStartDate: new Date().toISOString().slice(0, 10),
+  phase: 'SEEDLING',
   selectedPlanId: 'balanced',
   mixerStep: 0,
   history: [],
@@ -20,14 +28,28 @@ const createInitialState = (): AppState => ({
 });
 
 function loadState(): AppState {
+  const initial = createInitialState();
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createInitialState();
-    const parsed = JSON.parse(raw) as AppState;
-    if (!parsed || !Array.isArray(parsed.pots) || !Array.isArray(parsed.history)) return createInitialState();
-    return parsed;
+    if (!raw) return initial;
+
+    const parsed = JSON.parse(raw) as Partial<AppState>;
+    if (!parsed || !Array.isArray(parsed.pots) || !Array.isArray(parsed.history)) return initial;
+
+    const phase = GROWTH_PHASES.includes(parsed.phase as GrowthPhase)
+      ? (parsed.phase as GrowthPhase)
+      : initial.phase;
+
+    return {
+      ...initial,
+      ...parsed,
+      phase,
+      pots: parsed.pots,
+      history: parsed.history,
+    } as AppState;
   } catch {
-    return createInitialState();
+    return initial;
   }
 }
 
@@ -38,6 +60,7 @@ interface StoreValue {
   setControlMode: (mode: ControlMode) => void;
   setBatchLiters: (liters: number) => void;
   setCycleStartDate: (date: string) => void;
+  setPhase: (phase: GrowthPhase) => void;
   selectPlan: (id: PlanId) => void;
   setMixerStep: (step: number) => void;
   recordPotWeight: (id: AppState['pots'][number]['id'], kg: number) => void;
@@ -62,7 +85,11 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
     });
   };
 
-  const plans = useMemo(() => buildPlanVariants(state.batchLiters), [state.batchLiters]);
+  const cycleDay = getCycleDay(state.cycleStartDate);
+  const plans = useMemo(
+    () => buildPlanVariants({ batchLiters: state.batchLiters, cycleDay, phase: state.phase }),
+    [state.batchLiters, cycleDay, state.phase],
+  );
   const selectedPlan = plans.find((plan) => plan.id === state.selectedPlanId);
 
   const value: StoreValue = {
@@ -72,6 +99,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
     setControlMode: (controlMode) => commit((current) => ({ ...current, controlMode })),
     setBatchLiters: (batchLiters) => commit((current) => ({ ...current, batchLiters })),
     setCycleStartDate: (cycleStartDate) => commit((current) => ({ ...current, cycleStartDate })),
+    setPhase: (phase) => commit((current) => ({ ...current, phase, mixerStep: 0 })),
     selectPlan: (selectedPlanId) => commit((current) => ({ ...current, selectedPlanId, mixerStep: 0 })),
     setMixerStep: (mixerStep) => commit((current) => ({ ...current, mixerStep })),
     recordPotWeight: (id, kg) => {
