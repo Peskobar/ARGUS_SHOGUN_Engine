@@ -1,11 +1,12 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
   "extractedAt": "2026-09-01",
   "cleanupAt": "2026-09-01",
   "upgrade3At": "2026-09-01",
+  "upgrade4At": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -30,10 +31,13 @@
     },
     {
       "path": "evidence/SHOGUN_EVIDENCE_LEDGER_v1.json",
-      "status": "EVIDENCE_REVIEWED_NOT_RUNTIME",
+      "status": "RUNTIME_AVAILABILITY_ONLY",
       "reviewedAt": "2026-09-01",
       "sourceScope": "CURRENT_OFFICIAL_MANUFACTURER_PAGES",
-      "note": "Atomic VERIFIED/PARTIAL/CONFLICT claims. No direct import into app/src. Runtime promotion requires an active V1 consumer and a separate explicit upgrade."
+      "runtimeConsumer": "app/src/data/manufacturerPlanStatus.ts",
+      "runtimeSubset": "PLAN_COMPLETENESS_AVAILABILITY_ONLY",
+      "operationalValuesPromoted": false,
+      "note": "Upgrade 4 consumes only the evidence conclusion that no complete verified manufacturer plan is available for the current phase. No dose, concentration or process value from the ledger is imported into app/src."
     },
     {
       "path": "quarantine/unverified-recipes.json",
