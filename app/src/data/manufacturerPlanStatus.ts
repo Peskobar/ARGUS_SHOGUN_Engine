@@ -3,22 +3,22 @@ import type { GrowthPhase } from '../domain/types.ts';
 export interface ManufacturerPlanStatus {
   phase: GrowthPhase;
   available: false;
-  evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v1';
+  evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2';
   reason: string;
 }
 
 const REASONS: Record<GrowthPhase, string> = {
-  SEEDLING: 'Brak kompletnego, bezkonfliktowego zestawu danych producenta dla całego planu tej fazy.',
-  VEG: 'Brak kompletnego, bezkonfliktowego zestawu danych producenta dla całego planu tej fazy.',
-  FLOWER: 'Brak kompletnego, bezkonfliktowego zestawu danych producenta dla całego planu tej fazy.',
-  FLUSH: 'Brak kompletnego, zweryfikowanego planu producenta dla tej fazy.',
+  SEEDLING: 'Oficjalne dane harmonogramu istnieją, ale profil producenta nie został jeszcze odwzorowany do jednego zweryfikowanego kontekstu runtime.',
+  VEG: 'Oficjalny feedchart jest zależny od tygodnia fazy, profilu wody i profilu karmienia. Tego kontekstu runtime jeszcze nie przechowuje.',
+  FLOWER: 'Oficjalny feedchart jest zależny od tygodnia fazy, profilu wody i profilu karmienia. Tego kontekstu runtime jeszcze nie przechowuje.',
+  FLUSH: 'Oficjalny harmonogram przewiduje końcowy tydzień tylko na wodzie, ale V1 nie reprezentuje jeszcze takiego planu jako wykonywalnego wariantu Producent.',
 };
 
 export function getManufacturerPlanStatus(phase: GrowthPhase): ManufacturerPlanStatus {
   return {
     phase,
     available: false,
-    evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v1',
+    evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2',
     reason: REASONS[phase],
   };
 }
