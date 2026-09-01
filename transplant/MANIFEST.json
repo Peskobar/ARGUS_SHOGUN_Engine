@@ -1,10 +1,11 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
   "extractedAt": "2026-09-01",
   "cleanupAt": "2026-09-01",
+  "upgrade3At": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -28,6 +29,13 @@
       "note": "Evidence review is preserved. No runtime policy is promoted until an active V1 flow consumes a specific rule."
     },
     {
+      "path": "evidence/SHOGUN_EVIDENCE_LEDGER_v1.json",
+      "status": "EVIDENCE_REVIEWED_NOT_RUNTIME",
+      "reviewedAt": "2026-09-01",
+      "sourceScope": "CURRENT_OFFICIAL_MANUFACTURER_PAGES",
+      "note": "Atomic VERIFIED/PARTIAL/CONFLICT claims. No direct import into app/src. Runtime promotion requires an active V1 consumer and a separate explicit upgrade."
+    },
+    {
       "path": "quarantine/unverified-recipes.json",
       "status": "QUARANTINED_UNVERIFIED"
     },
@@ -46,5 +54,5 @@
       "note": "Technically reviewed but not required by the active V1 flow. Preserve as donor knowledge, not runtime architecture."
     }
   ],
-  "promotionRule": "No donor package enters app/src without a concrete active V1 consumer. Evidence review alone is not sufficient for runtime promotion. Promote the smallest subset needed by the current user flow, with provenance and tests."
+  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. VERIFIED means source-backed, not automatically runtime-safe. PARTIAL and CONFLICT claims cannot drive a production plan. Promote the smallest subset needed by the current user flow, with provenance and tests."
 }
