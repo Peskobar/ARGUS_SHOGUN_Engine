@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "policyId": "OPERATOR_NONBLOCKING_POLICY_v1",
+  "checkedAt": "2026-09-01",
+  "productContract": "docs/01_PRODUCT/PRODUCT_CONTRACT_v0.2.md",
+  "rules": [
+    "Domain recommendations and missing exact manufacturer-profile coverage are advisories, not navigation blockers.",
+    "Operator may select any plan card and move from PLAN to PREPARATION.",
+    "Technical integrity is checked separately before an execution can be completed.",
+    "An empty ingredient list is a technical impossibility for automated mixer execution because ARGUS has no values to execute; it is not an agronomic veto.",
+    "Timers and advisories never gate the next screen.",
+    "Persistence failure may prevent marking an execution as completed because the history record would otherwise be false."
+  ]
+}
