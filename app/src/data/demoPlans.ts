@@ -26,13 +26,8 @@ export const DEMO_PLAN_TEMPLATES: DemoPlanTemplate[] = [
   {
     id: 'manufacturer',
     label: 'Producent',
-    description: 'Wariant demonstracyjny reprezentujący profil producenta.',
-    ingredients: [
-      { ...shared.silicon, amountPer10L: 1 },
-      { ...shared.base, amountPer10L: 4 },
-      { ...shared.roots, amountPer10L: 2 },
-      { ...shared.enzyme, amountPer10L: 2 },
-    ],
+    description: 'Miejsce na pierwszy kompletny, zweryfikowany plan producenta.',
+    ingredients: [],
   },
   {
     id: 'balanced',
