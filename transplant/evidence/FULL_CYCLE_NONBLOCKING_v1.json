@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "policyId": "FULL_CYCLE_NONBLOCKING_v1",
+  "createdAt": "2026-09-01",
+  "scope": "Runtime flow only. No new operational dose values.",
+  "rules": [
+    "All growth phases remain selectable and executable in the app flow.",
+    "Missing automatic schedule data switches the flow to OPERATOR mode instead of blocking navigation.",
+    "History must preserve phase and phaseWeek for both PLAN and OPERATOR_OVERRIDE executions.",
+    "The app must never fabricate unknown ingredients or doses.",
+    "Persistence failure remains a hard technical stop."
+  ]
+}
