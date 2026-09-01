@@ -30,7 +30,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
       <div>
         <div className="eyebrow">PLAN</div>
         <h1>Wybierz wariant</h1>
-        <p className="muted">Wybór natychmiast przelicza partię. Bez dodatkowej bramki zatwierdzania.</p>
+        <p className="muted">ARGUS doradza i ostrzega. Operator wybiera i zawsze może przejść dalej.</p>
       </div>
 
       <label className="field">
@@ -63,7 +63,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
       <div className="plan-card stack-lg">
         <div>
           <div className="eyebrow">KONTEKST PRODUCENTA</div>
-          <p className="muted">Tylko dane potrzebne do wybrania właściwego profilu. Aplikacja je zapamiętuje.</p>
+          <p className="muted">Pomaga wybrać dokładny profil. Brak danych nie odbiera operatorowi prawa do kontynuacji.</p>
         </div>
 
         <label className="field">
@@ -145,15 +145,14 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
           <button
             key={plan.id}
             className={state.selectedPlanId === plan.id ? 'plan-card selected' : 'plan-card'}
-            disabled={!plan.selectable}
             onClick={() => selectPlan(plan.id)}
           >
             <div className="plan-card-top">
               <strong>{plan.label}</strong>
-              {plan.id === 'manufacturer' && plan.selectable ? (
+              {plan.id === 'manufacturer' && plan.verifiedProfileAvailable ? (
                 <span className="badge">ZWERYFIKOWANY</span>
-              ) : !plan.selectable ? (
-                <span className="badge orange">{plan.contextReady ? 'PROFIL JESZCZE NIEDOSTĘPNY' : 'UZUPEŁNIJ KONTEKST'}</span>
+              ) : plan.id === 'manufacturer' ? (
+                <span className="badge orange">{plan.contextReady ? 'BRAK PROFILU W ARGUS' : 'BRAK PEŁNEGO KONTEKSTU'}</span>
               ) : null}
             </div>
             <p>{plan.description}</p>
@@ -163,7 +162,7 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
         ))}
       </div>
 
-      <button className="primary" disabled={!selectedPlan?.selectable} onClick={() => navigate('preparation')}>
+      <button className="primary" disabled={!selectedPlan} onClick={() => navigate('preparation')}>
         PRZEJDŹ DO PRZYGOTOWANIA
       </button>
     </section>
