@@ -13,11 +13,11 @@ const context = (batchLiters = 10): PlanContext => ({
   scheduleProfile: null,
 });
 
-const seedlingWeek1 = (batchLiters = 10): PlanContext => ({
+const seedlingWeek = (phaseWeek: 1 | 2, batchLiters = 10): PlanContext => ({
   batchLiters,
   cycleDay: 5,
   phase: 'SEEDLING',
-  phaseWeek: 1,
+  phaseWeek,
   waterProfile: null,
   customWaterEc: null,
   scheduleProfile: null,
@@ -57,51 +57,57 @@ void test('plan zachowuje dzień cyklu i fazę z kontekstu', () => {
   assert.equal(plan.phase, 'VEG');
 });
 
-void test('Producent bez tygodnia nadal nie zawiera dawek', () => {
+void test('Producent bez tygodnia jest wybieralny jako decyzja operatora, ale nie ma automatycznych dawek', () => {
   const manufacturer = buildPlanVariants(context())[0];
   assert.equal(manufacturer.id, 'manufacturer');
-  assert.equal(manufacturer.selectable, false);
+  assert.equal(manufacturer.verifiedProfileAvailable, false);
   assert.equal(manufacturer.ingredients.length, 0);
   assert.equal(manufacturer.evidenceLedger, 'SHOGUN_EVIDENCE_LEDGER_v2');
+  assert.ok(validatePlanForExecution(manufacturer).some((item) => item.includes('ograniczenie danych')));
+  assert.ok(getAdvisories(manufacturer, 'UNLOCKED').some((item) => item.includes('nie blokuje operatora')));
 });
 
-void test('Siewka tydzień 1 uruchamia pierwszy zweryfikowany profil Producenta', () => {
-  const manufacturer = buildPlanVariants(seedlingWeek1())[0];
+for (const phaseWeek of [1, 2] as const) {
+  void test(`Siewka tydzień ${phaseWeek} ma zweryfikowany profil Producenta`, () => {
+    const manufacturer = buildPlanVariants(seedlingWeek(phaseWeek))[0];
 
-  assert.equal(manufacturer.selectable, true);
-  assert.equal(manufacturer.contextReady, true);
-  assert.equal(manufacturer.ingredients.length, 2);
-  assert.deepEqual(
-    manufacturer.ingredients.map((ingredient) => [ingredient.id, ingredient.amountMl, ingredient.sourceStatus]),
-    [
-      ['shogun-start', 40, 'VERIFIED'],
-      ['katana-roots', 50, 'VERIFIED'],
-    ],
-  );
-  assert.deepEqual(validatePlanForExecution(manufacturer), []);
-});
+    assert.equal(manufacturer.verifiedProfileAvailable, true);
+    assert.equal(manufacturer.contextReady, true);
+    assert.equal(manufacturer.ingredients.length, 2);
+    assert.deepEqual(
+      manufacturer.ingredients.map((ingredient) => [ingredient.id, ingredient.amountMl, ingredient.sourceStatus]),
+      [
+        ['shogun-start', 40, 'VERIFIED'],
+        ['katana-roots', 50, 'VERIFIED'],
+      ],
+    );
+    assert.deepEqual(validatePlanForExecution(manufacturer), []);
+  });
+}
 
 void test('zweryfikowany profil Producenta skaluje się liniowo z objętością partii', () => {
-  const ten = buildPlanVariants(seedlingWeek1(10))[0];
-  const five = buildPlanVariants(seedlingWeek1(5))[0];
+  const ten = buildPlanVariants(seedlingWeek(2, 10))[0];
+  const five = buildPlanVariants(seedlingWeek(2, 5))[0];
 
   assert.equal(five.ingredients[0].amountMl, ten.ingredients[0].amountMl / 2);
   assert.equal(five.ingredients[1].amountMl, ten.ingredients[1].amountMl / 2);
 });
 
-void test('Siewka tydzień 1 nie wymaga profilu wody ani karmienia', () => {
-  const manufacturer = buildPlanVariants(seedlingWeek1())[0];
-  assert.equal(manufacturer.selectable, true);
-  assert.equal(manufacturer.contextReady, true);
+void test('Siewka tygodnie 1-2 nie wymagają profilu wody ani karmienia', () => {
+  for (const phaseWeek of [1, 2] as const) {
+    const manufacturer = buildPlanVariants(seedlingWeek(phaseWeek))[0];
+    assert.equal(manufacturer.verifiedProfileAvailable, true);
+    assert.equal(manufacturer.contextReady, true);
+  }
 });
 
-void test('nie ma fallbacku na sąsiedni tydzień siewki', () => {
-  const manufacturer = buildPlanVariants({ ...seedlingWeek1(), phaseWeek: 2 })[0];
+void test('nie ma fallbacku z tygodnia 2 na tydzień 3 siewki', () => {
+  const manufacturer = buildPlanVariants({ ...seedlingWeek(2), phaseWeek: 3 })[0];
 
-  assert.equal(manufacturer.selectable, false);
+  assert.equal(manufacturer.verifiedProfileAvailable, false);
   assert.equal(manufacturer.contextReady, true);
   assert.equal(manufacturer.ingredients.length, 0);
-  assert.match(manufacturer.availabilityReason ?? '', /dokładny profil/);
+  assert.match(manufacturer.availabilityReason ?? '', /nie został jeszcze wprowadzony/);
 });
 
 void test('Producent jasno wskazuje brakujące pola kontekstu dla wegi', () => {
@@ -121,33 +127,34 @@ void test('Producent jasno wskazuje brakujące pola kontekstu dla wegi', () => {
   assert.match(manufacturer.availabilityReason ?? '', /profil karmienia/);
 });
 
-void test('każda gotowa kategoria wody producenta daje kompletny kontekst wegi', () => {
+void test('każda gotowa kategoria wody daje kompletny kontekst wegi, ale brak profilu nie jest wetem operatora', () => {
   for (const waterProfile of ['RO', 'SOFT', 'MODERATELY_HARD', 'HARD'] as const) {
     const manufacturer = buildPlanVariants(vegContext(waterProfile))[0];
     assert.equal(manufacturer.contextReady, true, waterProfile);
-    assert.equal(manufacturer.selectable, false, waterProfile);
+    assert.equal(manufacturer.verifiedProfileAvailable, false, waterProfile);
+    assert.ok(getAdvisories(manufacturer, 'UNLOCKED').some((item) => item.includes('nie blokuje operatora')));
   }
 });
 
-void test('Custom wymaga własnej wartości EC', () => {
+void test('Custom wymaga własnej wartości EC tylko do automatycznego dopasowania profilu', () => {
   const missingEc = buildPlanVariants(vegContext('CUSTOM'))[0];
   assert.equal(missingEc.contextReady, false);
   assert.match(missingEc.availabilityReason ?? '', /EC własnej wody/);
 
   const withEc = buildPlanVariants(vegContext('CUSTOM', 0.42))[0];
   assert.equal(withEc.contextReady, true);
-  assert.equal(withEc.selectable, false);
+  assert.equal(withEc.verifiedProfileAvailable, false);
 });
 
 void test('pełny kontekst wegi nie używa danych z innego profilu', () => {
   const manufacturer = buildPlanVariants(vegContext('HARD'))[0];
 
   assert.equal(manufacturer.contextReady, true);
-  assert.equal(manufacturer.selectable, false);
+  assert.equal(manufacturer.verifiedProfileAvailable, false);
   assert.equal(manufacturer.ingredients.length, 0);
 });
 
-void test('Flush wymaga tylko tygodnia fazy w kontekście producenta', () => {
+void test('Flush wymaga tylko tygodnia fazy do automatycznego profilu', () => {
   const manufacturer = buildPlanVariants({
     batchLiters: 10,
     cycleDay: 70,
@@ -159,11 +166,11 @@ void test('Flush wymaga tylko tygodnia fazy w kontekście producenta', () => {
   })[0];
 
   assert.equal(manufacturer.contextReady, true);
-  assert.equal(manufacturer.selectable, false);
+  assert.equal(manufacturer.verifiedProfileAvailable, false);
 });
 
 void test('zweryfikowany Producent nie dostaje ostrzeżenia DEMO', () => {
-  const manufacturer = buildPlanVariants(seedlingWeek1())[0];
+  const manufacturer = buildPlanVariants(seedlingWeek(2))[0];
   const advisories = getAdvisories(manufacturer, 'UNLOCKED');
   assert.ok(advisories.some((item) => item.includes('zweryfikowany')));
   assert.ok(advisories.every((item) => !item.includes('DEMO')));
@@ -175,7 +182,7 @@ void test('skaluje demo Zbalansowany 10 L do 5 L liniowo', () => {
   assert.equal(half.ingredients[1].amountMl, full.ingredients[1].amountMl / 2);
 });
 
-void test('ostrzeżenie DEMO nie jest blockerem dla dostępnego wariantu demo', () => {
+void test('ostrzeżenie DEMO nie jest blockerem dla wariantu demo', () => {
   const plan = buildPlanVariants(context())[1];
   assert.ok(getAdvisories(plan, 'UNLOCKED').some((item) => item.includes('DEMO')));
   assert.deepEqual(validatePlanForExecution(plan), []);
