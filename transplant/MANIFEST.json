@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
@@ -9,6 +9,7 @@
   "upgrade4At": "2026-09-01",
   "upgrade4RAt": "2026-09-01",
   "contextUpgradeAt": "2026-09-01",
+  "upgrade5At": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -45,7 +46,16 @@
       "runtimeConsumer": "app/src/data/manufacturerPlanStatus.ts",
       "runtimeSubset": "PHASE_WEEK_WATER_PROFILE_SCHEDULE_PROFILE_AND_PLAN_AVAILABILITY_ONLY",
       "operationalValuesPromoted": false,
-      "note": "Runtime now stores the minimal context required to choose a unique manufacturer schedule: phase week, water profile and feeding profile; FLUSH only requires phase week. No dose or concentration from the ledger is imported into app/src yet."
+      "note": "Runtime stores the context required for manufacturer schedules. Operational dose promotion is recorded separately per exact profile."
+    },
+    {
+      "path": "evidence/SHOGUN_PROFILE_TERRA_SEEDLING_W1_v1.json",
+      "status": "PROMOTED_EXACT_RUNTIME_PROFILE",
+      "reviewedAt": "2026-09-01",
+      "runtimeConsumer": "app/src/data/manufacturerSchedule.ts",
+      "runtimeSubset": "TERRA_SEEDLING_WEEK_1_ONLY",
+      "operationalValuesPromoted": true,
+      "note": "First exact manufacturer profile. Promotes only Start 4 ml/L and Katana Roots 5 ml/L for SEEDLING week 1. No water/schedule-profile assumption, no nearest-week fallback, no invented tool size or mixing timer."
     },
     {
       "path": "quarantine/unverified-recipes.json",
@@ -66,5 +76,5 @@
       "note": "Technically reviewed but not required by the active V1 flow. Preserve as donor knowledge, not runtime architecture."
     }
   ],
-  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. A schedule claim is eligible only after its context is explicit and reconciled against higher-priority manufacturer feedchart evidence. Promote the smallest subset needed by the current user flow, with provenance and tests."
+  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. Operational values are promoted only for an exact verified context. No interpolation, nearest-match fallback or hidden default is allowed."
 }
