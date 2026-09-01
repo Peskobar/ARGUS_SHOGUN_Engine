@@ -1,8 +1,26 @@
-import { GROWTH_PHASES, PHASE_LABELS, type ScreenId } from '../domain/types.ts';
+import {
+  GROWTH_PHASES,
+  PHASE_LABELS,
+  SCHEDULE_PROFILES,
+  SCHEDULE_PROFILE_LABELS,
+  WATER_PROFILES,
+  WATER_PROFILE_LABELS,
+  type ScreenId,
+} from '../domain/types.ts';
 import { useAppStore } from '../store/AppStore.tsx';
 
 export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void }) {
-  const { state, plans, selectedPlan, selectPlan, setBatchLiters, setPhase } = useAppStore();
+  const {
+    state,
+    plans,
+    selectedPlan,
+    selectPlan,
+    setBatchLiters,
+    setPhase,
+    setPhaseWeek,
+    setWaterProfile,
+    setScheduleProfile,
+  } = useAppStore();
 
   return (
     <section className="screen stack-lg">
@@ -39,6 +57,66 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
         </div>
       </label>
 
+      <div className="context-card">
+        <div>
+          <div className="eyebrow">KONTEKST PRODUCENTA</div>
+          <p className="muted">Tylko dane potrzebne do wybrania właściwego wiersza feedchartu. Aplikacja je zapamiętuje.</p>
+        </div>
+
+        <div className="context-grid">
+          <label className="field">
+            <span>Tydzień fazy</span>
+            <input
+              className="context-input"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={12}
+              placeholder="np. 2"
+              value={state.phaseWeek ?? ''}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setPhaseWeek(value === '' ? null : Number(value));
+              }}
+            />
+          </label>
+
+          {state.phase !== 'FLUSH' ? (
+            <>
+              <label className="field">
+                <span>Woda</span>
+                <div className="liters-control">
+                  {WATER_PROFILES.map((profile) => (
+                    <button
+                      key={profile}
+                      className={state.waterProfile === profile ? 'chip active' : 'chip'}
+                      onClick={() => setWaterProfile(profile)}
+                    >
+                      {WATER_PROFILE_LABELS[profile]}
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <label className="field">
+                <span>Profil karmienia</span>
+                <div className="liters-control">
+                  {SCHEDULE_PROFILES.map((profile) => (
+                    <button
+                      key={profile}
+                      className={state.scheduleProfile === profile ? 'chip active' : 'chip'}
+                      onClick={() => setScheduleProfile(profile)}
+                    >
+                      {SCHEDULE_PROFILE_LABELS[profile]}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            </>
+          ) : null}
+        </div>
+      </div>
+
       <div className="plan-grid">
         {plans.map((plan) => (
           <button
@@ -49,7 +127,9 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
           >
             <div className="plan-card-top">
               <strong>{plan.label}</strong>
-              {!plan.selectable ? <span className="badge orange">WYMAGA KONTEKSTU</span> : null}
+              {!plan.selectable ? (
+                <span className="badge orange">{plan.contextReady ? 'KONTEKST GOTOWY' : 'UZUPEŁNIJ KONTEKST'}</span>
+              ) : null}
             </div>
             <p>{plan.description}</p>
             {plan.availabilityReason ? <small className="muted">{plan.availabilityReason}</small> : null}
