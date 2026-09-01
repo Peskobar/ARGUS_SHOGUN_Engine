@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "profileId": "TERRA_SEEDLING_W2_V1",
+  "verifiedAt": "2026-09-01",
+  "runtimeTarget": "app/src/data/manufacturerSchedule.ts",
+  "context": {
+    "nutrientLine": "TERRA",
+    "phase": "SEEDLING",
+    "phaseWeek": 2,
+    "waterProfileRequired": false,
+    "scheduleProfileRequired": false
+  },
+  "ingredients": [
+    {
+      "productId": "shogun-start",
+      "amountPerLiterMl": 4,
+      "status": "VERIFIED",
+      "primarySource": "https://www.shogunfertilisers.com/products/start",
+      "evidence": "Current Product Info states Shogun Start at 4 ml/L for seedlings/cuts and early veg; official Terra feedchart shows 4 ml/L in Cuttings & Seedlings week 2."
+    },
+    {
+      "productId": "katana-roots",
+      "amountPerLiterMl": 5,
+      "status": "VERIFIED",
+      "primarySource": "https://www.shogunfertilisers.com/products/katana-roots",
+      "evidence": "Current Product Info states 5 ml/L for Cuts & Seedlings; official Terra feedchart shows 5 ml/L in Cuttings & Seedlings week 2."
+    }
+  ],
+  "feedchartSource": "https://www.shogunfertilisers.com/media/yhqdxajh/shogun_-_terra_feedchart_new.pdf",
+  "runtimeRules": [
+    "Exact match only: SEEDLING + phaseWeek 2.",
+    "No nearest-week fallback.",
+    "No interpolation.",
+    "No water-profile or Light/Standard/Heavy assumption is required for this seedling profile.",
+    "No mixer duration is promoted.",
+    "No physical measuring-tool size is promoted."
+  ]
+}
