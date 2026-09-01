@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "project": "ARGUS_SHOGUN",
   "donorPath": "legacy/ARGUS_SHOGUN_Engine_v1",
   "donorCommit": "cfbb3e2e48f89b61441555d7c8eac3dec6ab44cf",
@@ -7,6 +7,7 @@
   "cleanupAt": "2026-09-01",
   "upgrade3At": "2026-09-01",
   "upgrade4At": "2026-09-01",
+  "upgrade4RAt": "2026-09-01",
   "packages": [
     {
       "path": "candidates/domain-taxonomy.json",
@@ -31,13 +32,19 @@
     },
     {
       "path": "evidence/SHOGUN_EVIDENCE_LEDGER_v1.json",
+      "status": "SUPERSEDED_EVIDENCE_HISTORY",
+      "reviewedAt": "2026-09-01",
+      "note": "Preserved as the first product-page audit. Its blanket completeness conclusion is superseded by v2 after feedchart reconciliation."
+    },
+    {
+      "path": "evidence/SHOGUN_EVIDENCE_LEDGER_v2.json",
       "status": "RUNTIME_AVAILABILITY_ONLY",
       "reviewedAt": "2026-09-01",
-      "sourceScope": "CURRENT_OFFICIAL_MANUFACTURER_PAGES",
+      "sourceScope": "CURRENT_OFFICIAL_PRODUCT_PAGES_PLUS_FEEDCHARTS_AND_CALCULATOR",
       "runtimeConsumer": "app/src/data/manufacturerPlanStatus.ts",
-      "runtimeSubset": "PLAN_COMPLETENESS_AVAILABILITY_ONLY",
+      "runtimeSubset": "PLAN_CONTEXT_AVAILABILITY_ONLY",
       "operationalValuesPromoted": false,
-      "note": "Upgrade 4 consumes only the evidence conclusion that no complete verified manufacturer plan is available for the current phase. No dose, concentration or process value from the ledger is imported into app/src."
+      "note": "Upgrade 4R resolves schedule-context false conflicts and corrects the runtime conclusion: official schedule data exists, but V1 lacks enough context to select one unique manufacturer schedule. No dose or concentration is imported into app/src."
     },
     {
       "path": "quarantine/unverified-recipes.json",
@@ -58,5 +65,5 @@
       "note": "Technically reviewed but not required by the active V1 flow. Preserve as donor knowledge, not runtime architecture."
     }
   ],
-  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. VERIFIED means source-backed, not automatically runtime-safe. PARTIAL and CONFLICT claims cannot drive a production plan. Promote the smallest subset needed by the current user flow, with provenance and tests."
+  "promotionRule": "No donor or evidence package enters app/src without a concrete active V1 consumer. A schedule claim is eligible only after its context is explicit and reconciled against higher-priority manufacturer feedchart evidence. Promote the smallest subset needed by the current user flow, with provenance and tests."
 }
