@@ -15,7 +15,7 @@ export function getManufacturerPlanStatus(context: PlanContext): ManufacturerPla
       available: true,
       contextReady: true,
       evidenceLedger: schedule.evidenceLedger,
-      reason: 'Zweryfikowany profil producenta jest dostępny dla siewki, tydzień 1.',
+      reason: `Zweryfikowany profil producenta jest dostępny dla siewki, tydzień ${schedule.phaseWeek}.`,
     };
   }
 
@@ -36,7 +36,7 @@ export function getManufacturerPlanStatus(context: PlanContext): ManufacturerPla
       available: false,
       contextReady: false,
       evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2',
-      reason: `Uzupełnij: ${missing.join(', ')}.`,
+      reason: `ARGUS nie ma pełnego kontekstu: ${missing.join(', ')}. Operator może mimo to kontynuować poza automatycznym profilem.`,
     };
   }
 
@@ -44,6 +44,6 @@ export function getManufacturerPlanStatus(context: PlanContext): ManufacturerPla
     available: false,
     contextReady: true,
     evidenceLedger: 'SHOGUN_EVIDENCE_LEDGER_v2',
-    reason: 'Ten dokładny profil producenta nie został jeszcze wprowadzony. ARGUS nie używa najbliższego tygodnia ani wartości zastępczych.',
+    reason: 'Ten dokładny profil producenta nie został jeszcze wprowadzony. ARGUS nie zgaduje dawek, ale nie blokuje decyzji operatora.',
   };
 }
