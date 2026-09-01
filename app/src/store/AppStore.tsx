@@ -45,6 +45,7 @@ function loadState(): AppState {
       ...initial,
       ...parsed,
       phase,
+      selectedPlanId: parsed.selectedPlanId === 'manufacturer' ? null : (parsed.selectedPlanId ?? initial.selectedPlanId),
       pots: parsed.pots,
       history: parsed.history,
     } as AppState;
@@ -100,7 +101,11 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
     setBatchLiters: (batchLiters) => commit((current) => ({ ...current, batchLiters })),
     setCycleStartDate: (cycleStartDate) => commit((current) => ({ ...current, cycleStartDate })),
     setPhase: (phase) => commit((current) => ({ ...current, phase, mixerStep: 0 })),
-    selectPlan: (selectedPlanId) => commit((current) => ({ ...current, selectedPlanId, mixerStep: 0 })),
+    selectPlan: (selectedPlanId) => {
+      const candidate = plans.find((plan) => plan.id === selectedPlanId);
+      if (!candidate?.selectable) return;
+      commit((current) => ({ ...current, selectedPlanId, mixerStep: 0 }));
+    },
     setMixerStep: (mixerStep) => commit((current) => ({ ...current, mixerStep })),
     recordPotWeight: (id, kg) => {
       if (!Number.isFinite(kg) || kg <= 0) return;
