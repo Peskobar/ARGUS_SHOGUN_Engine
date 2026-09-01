@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  DOMAIN_TAXONOMY,
-  PRODUCT_IDENTITIES,
-  getProductIdentity,
-} from '../data/referenceCatalog.ts';
+import { PRODUCT_IDENTITIES, getProductIdentity } from '../data/referenceCatalog.ts';
+import { DOMAIN_TAXONOMY } from './taxonomy.ts';
 
 test('promoted catalog has unique stable product ids', () => {
   const ids = PRODUCT_IDENTITIES.map((product) => product.id);
