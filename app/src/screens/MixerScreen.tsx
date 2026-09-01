@@ -17,7 +17,7 @@ function signalDone() {
 }
 
 export function MixerScreen({ navigate }: { navigate: (screen: ScreenId) => void }) {
-  const { state, selectedPlan, setMixerStep, completeExecution } = useAppStore();
+  const { state, selectedPlan, setMixerStep, completeExecution, completeOperatorExecution } = useAppStore();
   const stepIndex = Math.min(state.mixerStep, Math.max(0, (selectedPlan?.ingredients.length ?? 1) - 1));
   const ingredient = selectedPlan?.ingredients[stepIndex];
   const [added, setAdded] = useState(false);
@@ -44,11 +44,48 @@ export function MixerScreen({ navigate }: { navigate: (screen: ScreenId) => void
     }
   }, [running, remaining]);
 
-  if (!selectedPlan || !ingredient) {
+  if (!selectedPlan) {
     return (
       <section className="screen stack-lg">
-        <div className="blocker">⛔ Brak poprawnego planu do wykonania.</div>
+        <div className="blocker">⛔ Brak wybranego planu.</div>
         <button className="primary" onClick={() => navigate('plan')}>DO PLANU</button>
+      </section>
+    );
+  }
+
+  if (!ingredient) {
+    const finishAsOperator = () => {
+      const result = completeOperatorExecution();
+      if (result) setError(result);
+      else navigate('history');
+    };
+
+    return (
+      <section className="screen stack-lg">
+        <div className="mixer-head">
+          <div>
+            <div className="eyebrow">MIXER · OPERATOR</div>
+            <h1>{selectedPlan.label}</h1>
+          </div>
+          <span className="badge orange">OPERATOR</span>
+        </div>
+
+        <div className="warning">
+          ⚠️ ARGUS nie ma automatycznych dawek dla tego dokładnego kontekstu. To nie jest zakaz wykonania.
+        </div>
+
+        <div className="mixer-card">
+          <span className="eyebrow">RZECZYWISTOŚĆ MA PIERWSZEŃSTWO</span>
+          <h2>Wykonaj według stanu rzeczywistego</h2>
+          <p className="muted">Aplikacja nie wpisze nieznanych dawek do Historii. Zapisze tylko, że operator świadomie wykonał sesję poza automatycznym profilem ARGUS.</p>
+        </div>
+
+        {error ? <div className="blocker">⛔ {error}</div> : null}
+
+        <div className="action-row">
+          <button className="secondary" onClick={() => navigate('preparation')}>WRÓĆ</button>
+          <button className="primary neon" onClick={finishAsOperator}>WYKONANIE ZAKOŃCZONE · OPERATOR</button>
+        </div>
       </section>
     );
   }
