@@ -4,8 +4,12 @@ export type ControlMode = 'PRO' | 'STANDARD' | 'UNLOCKED';
 export type PlanId = 'manufacturer' | 'balanced' | 'growth';
 export type SourceStatus = 'DEMO_DATA_NOT_FOR_USE' | 'VERIFIED' | 'OPERATOR';
 export type GrowthPhase = 'SEEDLING' | 'VEG' | 'FLOWER' | 'FLUSH';
+export type WaterProfile = 'SOFT' | 'HARD';
+export type ScheduleProfile = 'LIGHT' | 'STANDARD' | 'HEAVY';
 
 export const GROWTH_PHASES: readonly GrowthPhase[] = ['SEEDLING', 'VEG', 'FLOWER', 'FLUSH'];
+export const WATER_PROFILES: readonly WaterProfile[] = ['SOFT', 'HARD'];
+export const SCHEDULE_PROFILES: readonly ScheduleProfile[] = ['LIGHT', 'STANDARD', 'HEAVY'];
 
 export const PHASE_LABELS: Record<GrowthPhase, string> = {
   SEEDLING: 'Siewka',
@@ -14,10 +18,24 @@ export const PHASE_LABELS: Record<GrowthPhase, string> = {
   FLUSH: 'Flush',
 };
 
+export const WATER_PROFILE_LABELS: Record<WaterProfile, string> = {
+  SOFT: 'Miękka',
+  HARD: 'Twarda',
+};
+
+export const SCHEDULE_PROFILE_LABELS: Record<ScheduleProfile, string> = {
+  LIGHT: 'Lekki',
+  STANDARD: 'Standard',
+  HEAVY: 'Mocny',
+};
+
 export interface PlanContext {
   batchLiters: number;
   cycleDay: number;
   phase: GrowthPhase;
+  phaseWeek: number | null;
+  waterProfile: WaterProfile | null;
+  scheduleProfile: ScheduleProfile | null;
 }
 
 export interface IngredientDose {
@@ -37,6 +55,7 @@ export interface PlanVariant {
   cycleDay: number;
   phase: GrowthPhase;
   selectable: boolean;
+  contextReady?: boolean;
   availabilityReason?: string;
   evidenceLedger?: string;
   ingredients: IngredientDose[];
@@ -67,6 +86,9 @@ export interface AppState {
   batchLiters: number;
   cycleStartDate: string;
   phase: GrowthPhase;
+  phaseWeek: number | null;
+  waterProfile: WaterProfile | null;
+  scheduleProfile: ScheduleProfile | null;
   selectedPlanId: PlanId | null;
   mixerStep: number;
   history: HistoryRecord[];
