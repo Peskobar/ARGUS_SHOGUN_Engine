@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ScreenId } from '../domain/types.ts';
+import { getManufacturerRuntime } from '../manufacturerRuntime/getManufacturerRuntime.ts';
 import { useAppStore } from '../store/AppStore.tsx';
 
 function signalDone() {
@@ -24,6 +25,13 @@ export function MixerScreen({ navigate }: { navigate: (screen: ScreenId) => void
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState(ingredient?.mixSeconds ?? 0);
   const [error, setError] = useState<string | null>(null);
+  const manufacturerRuntime = getManufacturerRuntime({
+    phase: state.phase,
+    phaseWeek: state.phaseWeek,
+    waterProfile: state.waterProfile,
+    customWaterEc: state.customWaterEc,
+    scheduleProfile: state.scheduleProfile,
+  });
 
   useEffect(() => {
     setAdded(false);
@@ -73,6 +81,41 @@ export function MixerScreen({ navigate }: { navigate: (screen: ScreenId) => void
         <div className="warning">
           ⚠️ ARGUS nie ma automatycznych dawek dla tego dokładnego kontekstu. To nie jest zakaz wykonania.
         </div>
+
+        {selectedPlan.id === 'manufacturer' ? (
+          <div className="plan-card stack-lg">
+            <div className="plan-card-top">
+              <div>
+                <div className="eyebrow">CO MÓWI PRODUCENT?</div>
+                <strong>{manufacturerRuntime.guidanceStatus}</strong>
+              </div>
+              <span className="badge orange">GUIDANCE</span>
+            </div>
+
+            {manufacturerRuntime.products.length > 0 ? (
+              <div className="ingredient-list">
+                {manufacturerRuntime.products.map((product) => (
+                  <div className="ingredient-row" key={product.productId}>
+                    <div>
+                      <strong>{product.officialName}</strong>
+                      <small>{product.purpose.value ?? 'Brak potwierdzonego opisu funkcji.'}</small>
+                    </div>
+                    <b>INFO</b>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Brak produktu potwierdzonego dla tego dokładnego okna fazy. Runtime nie dopisuje go na siłę.</p>
+            )}
+
+            {manufacturerRuntime.mixingGuidance.map((text) => (
+              <div className="warning" key={text}>⚠️ {text}</div>
+            ))}
+
+            <p className="muted">{manufacturerRuntime.waterGuidance}</p>
+            <p className="muted">{manufacturerRuntime.ecGuidance}</p>
+          </div>
+        ) : null}
 
         <div className="mixer-card">
           <span className="eyebrow">RZECZYWISTOŚĆ MA PIERWSZEŃSTWO</span>
