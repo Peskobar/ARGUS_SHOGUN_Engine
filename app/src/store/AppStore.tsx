@@ -1,12 +1,16 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
+import { INVENTORY_SEED } from '../data/inventorySeed.ts';
 import { buildPlanVariants, getCycleDay, validatePlanForExecution } from '../domain/planEngine.ts';
 import {
   GROWTH_PHASES,
+  INVENTORY_UNITS,
   SCHEDULE_PROFILES,
   WATER_PROFILES,
   type AppState,
   type ControlMode,
   type GrowthPhase,
+  type InventoryItem,
+  type InventoryUnit,
   type PlanId,
   type PlanVariant,
   type ScheduleProfile,
@@ -14,6 +18,33 @@ import {
 } from '../domain/types.ts';
 
 const STORAGE_KEY = 'argus-shogun-v1-state';
+
+const freshInventory = (): InventoryItem[] => INVENTORY_SEED.map((item) => ({ ...item }));
+
+function normalizeInventory(value: unknown): InventoryItem[] {
+  const stored = Array.isArray(value) ? value : [];
+  const byId = new Map<string, InventoryItem>();
+
+  for (const raw of stored) {
+    if (!raw || typeof raw !== 'object') continue;
+    const candidate = raw as Partial<InventoryItem>;
+    if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string') continue;
+    if (!INVENTORY_UNITS.includes(candidate.unit as InventoryUnit)) continue;
+    const quantity = candidate.quantity === null
+      ? null
+      : Number.isFinite(candidate.quantity) && (candidate.quantity ?? -1) >= 0
+        ? Number(candidate.quantity)
+        : null;
+    byId.set(candidate.id, {
+      id: candidate.id,
+      name: candidate.name,
+      quantity,
+      unit: candidate.unit as InventoryUnit,
+    });
+  }
+
+  return INVENTORY_SEED.map((seed) => byId.get(seed.id) ?? { ...seed });
+}
 
 const createInitialState = (): AppState => ({
   controlMode: 'STANDARD',
@@ -33,6 +64,7 @@ const createInitialState = (): AppState => ({
     { id: 'D3', measurements: [] },
     { id: 'D4', measurements: [] },
   ],
+  inventory: freshInventory(),
 });
 
 function loadState(): AppState {
@@ -76,6 +108,7 @@ function loadState(): AppState {
       selectedPlanId,
       pots: parsed.pots,
       history: parsed.history,
+      inventory: normalizeInventory(parsed.inventory),
     } as AppState;
   } catch {
     return initial;
@@ -97,6 +130,8 @@ interface StoreValue {
   selectPlan: (id: PlanId) => void;
   setMixerStep: (step: number) => void;
   recordPotWeight: (id: AppState['pots'][number]['id'], kg: number) => void;
+  setInventoryQuantity: (id: string, quantity: number | null) => void;
+  setInventoryUnit: (id: string, unit: InventoryUnit) => void;
   completeExecution: () => string | null;
   completeOperatorExecution: () => string | null;
   resetDemo: () => void;
@@ -185,6 +220,20 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
         ),
       }));
     },
+    setInventoryQuantity: (id, quantity) => {
+      if (quantity !== null && (!Number.isFinite(quantity) || quantity < 0)) return;
+      commit((current) => ({
+        ...current,
+        inventory: current.inventory.map((item) => item.id === id ? { ...item, quantity } : item),
+      }));
+    },
+    setInventoryUnit: (id, unit) => {
+      if (!INVENTORY_UNITS.includes(unit)) return;
+      commit((current) => ({
+        ...current,
+        inventory: current.inventory.map((item) => item.id === id ? { ...item, unit } : item),
+      }));
+    },
     completeExecution: () => {
       const blockers = validatePlanForExecution(selectedPlan);
       if (blockers.length > 0 || !selectedPlan) return blockers.join(' ');
@@ -222,7 +271,7 @@ export function AppStoreProvider({ children }: PropsWithChildren) {
       });
     },
     resetDemo: () => {
-      const next = createInitialState();
+      const next = { ...createInitialState(), inventory: state.inventory.map((item) => ({ ...item })) };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       setState(next);
     },
