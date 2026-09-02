@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ControlMode, ScreenId } from './domain/types.ts';
 import { HistoryScreen } from './screens/HistoryScreen.tsx';
+import { InventoryScreen } from './screens/InventoryScreen.tsx';
 import { MixerScreen } from './screens/MixerScreen.tsx';
 import { PlanScreen } from './screens/PlanScreen.tsx';
 import { PotsScreen } from './screens/PotsScreen.tsx';
@@ -14,6 +15,7 @@ const nav: Array<{ id: ScreenId; label: string; icon: string }> = [
   { id: 'plan', label: 'Plan', icon: '▦' },
   { id: 'pots', label: 'Donice', icon: '◫' },
   { id: 'mixer', label: 'Mixer', icon: '⌁' },
+  { id: 'inventory', label: 'Magazyn', icon: '▤' },
   { id: 'history', label: 'Historia', icon: '↺' },
   { id: 'trends', label: 'Trendy', icon: '⌁' },
 ];
@@ -28,6 +30,7 @@ export default function App() {
     case 'preparation': content = <PreparationScreen navigate={setScreen} />; break;
     case 'pots': content = <PotsScreen />; break;
     case 'mixer': content = <MixerScreen navigate={setScreen} />; break;
+    case 'inventory': content = <InventoryScreen />; break;
     case 'history': content = <HistoryScreen />; break;
     case 'trends': content = <TrendsScreen />; break;
     default: content = <TodayScreen navigate={setScreen} />;
@@ -54,7 +57,7 @@ export default function App() {
 
       <main>{content}</main>
 
-      <button className="reset-link" onClick={resetDemo}>Reset danych demo</button>
+      <button className="reset-link" onClick={resetDemo}>Reset danych demo · magazyn zostaje</button>
 
       <nav className="bottom-nav">
         {nav.map((item) => (
