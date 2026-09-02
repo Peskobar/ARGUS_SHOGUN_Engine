@@ -1,0 +1,14 @@
+.inventory-list { display: grid; gap: 12px; }
+.inventory-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.inventory-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.inventory-title strong { line-height: 1.25; }
+.inventory-controls { display: grid; grid-template-columns: minmax(0, 1fr) 86px; gap: 8px; margin-top: 14px; }
+.inventory-controls input,
+.inventory-controls select { width: 100%; border: 1px solid var(--line); background: #0d100e; color: var(--text); border-radius: 12px; padding: 12px; }
+.inventory-controls input:focus,
+.inventory-controls select:focus { outline: 1px solid var(--yellow); border-color: var(--yellow); }
+.bottom-nav { grid-template-columns: repeat(7, 1fr); }
+
+@media (min-width: 680px) {
+  .inventory-list { grid-template-columns: 1fr 1fr; }
+}
