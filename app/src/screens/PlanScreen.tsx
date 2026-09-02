@@ -8,7 +8,17 @@ import {
   WATER_PROFILE_LABELS,
   type ScreenId,
 } from '../domain/types.ts';
+import { getManufacturerRuntime } from '../manufacturerRuntime/getManufacturerRuntime.ts';
+import type { GuidanceStatus } from '../manufacturerRuntime/types.ts';
 import { useAppStore } from '../store/AppStore.tsx';
+
+const GUIDANCE_LABELS: Record<GuidanceStatus, string> = {
+  VERIFIED_AUTO: 'VERIFIED AUTO',
+  PARTIAL_VERIFIED: 'PARTIAL VERIFIED',
+  OPERATOR_GUIDANCE: 'OPERATOR + GUIDANCE',
+  CONFLICT: 'CONFLICT',
+  NO_EVIDENCE: 'NO EVIDENCE',
+};
 
 export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void }) {
   const {
@@ -25,15 +35,19 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
   } = useAppStore();
 
   const needsDetailedManufacturerContext = state.phase === 'VEG' || state.phase === 'FLOWER';
-  const coverage = getCycleCoverage({
-    batchLiters: state.batchLiters,
-    cycleDay: plans[0]?.cycleDay ?? 1,
+  const runtimeQuery = {
     phase: state.phase,
     phaseWeek: state.phaseWeek,
     waterProfile: state.waterProfile,
     customWaterEc: state.customWaterEc,
     scheduleProfile: state.scheduleProfile,
+  };
+  const coverage = getCycleCoverage({
+    batchLiters: state.batchLiters,
+    cycleDay: plans[0]?.cycleDay ?? 1,
+    ...runtimeQuery,
   });
+  const manufacturerRuntime = getManufacturerRuntime(runtimeQuery);
 
   return (
     <section className="screen stack-lg">
@@ -152,6 +166,54 @@ export function PlanScreen({ navigate }: { navigate: (screen: ScreenId) => void 
         <div className={coverage.mode === 'AUTOMATED' ? 'status-dot' : 'warning'}>
           {coverage.mode === 'AUTOMATED' ? 'AUTO' : 'OPERATOR'} · {coverage.reason}
         </div>
+      </div>
+
+      <div className="plan-card stack-lg">
+        <div className="plan-card-top">
+          <div>
+            <div className="eyebrow">CO MÓWI PRODUCENT?</div>
+            <strong>{PHASE_LABELS[state.phase]}{state.phaseWeek ? ` · tydzień ${state.phaseWeek}` : ''}</strong>
+          </div>
+          <span className={manufacturerRuntime.verifiedRecipeAvailable ? 'badge' : 'badge orange'}>
+            {GUIDANCE_LABELS[manufacturerRuntime.guidanceStatus]}
+          </span>
+        </div>
+
+        {manufacturerRuntime.products.length > 0 ? (
+          <div className="ingredient-list">
+            {manufacturerRuntime.products.map((product) => (
+              <div className="ingredient-row" key={product.productId}>
+                <div>
+                  <strong>{product.officialName}</strong>
+                  <small>{product.purpose.value ?? 'Brak potwierdzonego opisu funkcji.'}</small>
+                </div>
+                <b>GUIDANCE</b>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">Brak produktu przypisanego do tego dokładnego okna. Kontekst fazy nadal pozostaje dostępny.</p>
+        )}
+
+        {manufacturerRuntime.mixingGuidance.map((text) => (
+          <div className="warning" key={text}>⚠️ {text}</div>
+        ))}
+
+        <div>
+          <div className="eyebrow">WSKAZÓWKI</div>
+          {manufacturerRuntime.manufacturerGuidance.slice(0, 4).map((text) => (
+            <p className="muted" key={text}>• {text}</p>
+          ))}
+        </div>
+
+        {manufacturerRuntime.missingEvidence.length > 0 ? (
+          <div>
+            <div className="eyebrow">BRAKUJE DO AUTO</div>
+            {manufacturerRuntime.missingEvidence.slice(0, 4).map((text) => (
+              <p className="muted" key={text}>• {text}</p>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="plan-grid">
