@@ -15,14 +15,16 @@ Status: **LOCK**
 - Historia snapshotów
 - Donice D1–D4 i historia masy
 - podstawowe Trendy
+- prosty Magazyn operatora: stała lista produktów + ręczna ilość i jednostka
 - PRO / STANDARD / UNLOCKED
 - persistence lokalne
 - offline po pierwszym uruchomieniu
 
 ## OUT
 
-- pełny magazyn,
+- pełny system magazynowy,
 - automatyczne odejmowanie stanów magazynowych,
+- automatyczne prognozowanie zużycia i zakupy,
 - BIO-MAP,
 - konto/chmura/synchronizacja,
 - RAG/agent AI,
@@ -43,4 +45,5 @@ Operator może bez zewnętrznego backendu:
 8. zobaczyć snapshot w Historii,
 9. zapisać masę D1–D4,
 10. zobaczyć podstawowy trend,
-11. przełączyć UNLOCKED bez pojawienia się domenowych blokad.
+11. ręcznie wpisać i zachować stan produktów w Magazynie,
+12. przełączyć UNLOCKED bez pojawienia się domenowych blokad.
