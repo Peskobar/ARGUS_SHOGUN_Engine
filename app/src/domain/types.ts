@@ -1,4 +1,4 @@
-export type ScreenId = 'today' | 'plan' | 'preparation' | 'pots' | 'mixer' | 'history' | 'trends';
+export type ScreenId = 'today' | 'plan' | 'preparation' | 'pots' | 'mixer' | 'history' | 'trends' | 'inventory';
 
 export type ControlMode = 'PRO' | 'STANDARD' | 'UNLOCKED';
 export type PlanId = 'manufacturer' | 'balanced' | 'growth';
@@ -7,10 +7,12 @@ export type GrowthPhase = 'SEEDLING' | 'VEG' | 'FLOWER' | 'FLUSH';
 export type WaterProfile = 'RO' | 'SOFT' | 'MODERATELY_HARD' | 'HARD' | 'CUSTOM';
 export type ScheduleProfile = 'LIGHT' | 'STANDARD' | 'HEAVY';
 export type ExecutionMode = 'PLAN' | 'OPERATOR_OVERRIDE';
+export type InventoryUnit = 'ml' | 'g' | 'szt';
 
 export const GROWTH_PHASES: readonly GrowthPhase[] = ['SEEDLING', 'VEG', 'FLOWER', 'FLUSH'];
 export const WATER_PROFILES: readonly WaterProfile[] = ['RO', 'SOFT', 'MODERATELY_HARD', 'HARD', 'CUSTOM'];
 export const SCHEDULE_PROFILES: readonly ScheduleProfile[] = ['LIGHT', 'STANDARD', 'HEAVY'];
+export const INVENTORY_UNITS: readonly InventoryUnit[] = ['ml', 'g', 'szt'];
 
 export const PHASE_LABELS: Record<GrowthPhase, string> = {
   SEEDLING: 'Siewka',
@@ -76,6 +78,13 @@ export interface PotState {
   measurements: PotMeasurement[];
 }
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  quantity: number | null;
+  unit: InventoryUnit;
+}
+
 export interface HistoryRecord {
   id: string;
   completedAt: string;
@@ -104,4 +113,5 @@ export interface AppState {
   mixerStep: number;
   history: HistoryRecord[];
   pots: PotState[];
+  inventory: InventoryItem[];
 }
