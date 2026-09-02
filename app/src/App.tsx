@@ -9,6 +9,7 @@ import { PreparationScreen } from './screens/PreparationScreen.tsx';
 import { TodayScreen } from './screens/TodayScreen.tsx';
 import { TrendsScreen } from './screens/TrendsScreen.tsx';
 import { useAppStore } from './store/AppStore.tsx';
+import './inventory.css';
 
 const nav: Array<{ id: ScreenId; label: string; icon: string }> = [
   { id: 'today', label: 'Dzisiaj', icon: '◉' },
